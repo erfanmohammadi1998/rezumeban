@@ -10,11 +10,12 @@ import {
     Pie,
     Cell,
 } from "recharts";
-import { Clock, Trophy } from "lucide-react";
+import { Clock, Trophy, Download } from "lucide-react";
 
 import { statsApi } from "../../api/client";
+import { useToast } from "../../context/ToastContext";
 import useAsync from "../../hooks/useAsync";
-import { Card, Skeleton, SectionTitle, ErrorState } from "../../components/ui";
+import { Card, Skeleton, SectionTitle, ErrorState, Button } from "../../components/ui";
 import {
     APP_STATUS_LABELS,
     INTERVIEW_TYPE_LABELS,
@@ -44,7 +45,22 @@ function ChartCard({ title, children }) {
 }
 
 export default function ReportsPage() {
+    const toast = useToast();
     const { data, loading, error, reload } = useAsync(() => statsApi.reports(), []);
+
+    const exportCsv = async () => {
+        try {
+            const res = await statsApi.reportsExport();
+            const url = URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "hiring-funnel.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            toast.error("خروجی گرفتن ناموفق بود");
+        }
+    };
 
     if (error) return <ErrorState error={error} onRetry={reload} />;
     if (loading || !data) {
@@ -77,10 +93,26 @@ export default function ReportsPage() {
         name: `${r.rating}★`,
         count: r.count,
     }));
+    const funnel = (data.funnel || []).map((r) => ({
+        name: r.stage,
+        reached: r.reached,
+        current: r.current,
+        kind: r.kind,
+    }));
+    const timeInStage = (data.time_in_stage || []).map((r) => ({
+        name: r.stage,
+        avg_days: r.avg_days,
+    }));
+    const sources = data.source_effectiveness || [];
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-slate-100">گزارش‌ها</h1>
+            <div className="flex items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-slate-100">گزارش‌ها</h1>
+                <Button variant="secondary" icon={Download} onClick={exportCsv}>
+                    خروجی قیف (CSV)
+                </Button>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
                 <Card className="p-5 flex items-center gap-4">
@@ -107,7 +139,73 @@ export default function ReportsPage() {
                 </Card>
             </div>
 
+            {funnel.length > 0 && (
+                <ChartCard title="قیف استخدام — تعداد ورودی به هر مرحله">
+                    <BarChart data={funnel}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} />
+                        <YAxis
+                            tick={{ fill: "#64748b", fontSize: 11 }}
+                            allowDecimals={false}
+                            width={28}
+                        />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Bar dataKey="reached" name="کل ورودی" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                        <Bar dataKey="current" name="اکنون" fill="#22c55e" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                </ChartCard>
+            )}
+
             <div className="grid gap-6 lg:grid-cols-2">
+                {timeInStage.some((t) => t.avg_days > 0) && (
+                    <ChartCard title="میانگین روز در هر مرحله">
+                        <BarChart data={timeInStage} layout="vertical" margin={{ right: 16 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
+                            <YAxis
+                                type="category"
+                                dataKey="name"
+                                tick={{ fill: "#64748b", fontSize: 10 }}
+                                width={90}
+                            />
+                            <Tooltip contentStyle={tooltipStyle} />
+                            <Bar dataKey="avg_days" name="روز" fill="#f59e0b" radius={[0, 6, 6, 0]} />
+                        </BarChart>
+                    </ChartCard>
+                )}
+
+                {sources.length > 0 && (
+                    <Card className="p-6">
+                        <SectionTitle>اثربخشی منابع جذب</SectionTitle>
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="text-slate-500 text-xs">
+                                    <th className="text-right pb-2">منبع</th>
+                                    <th className="text-left pb-2">درخواست</th>
+                                    <th className="text-left pb-2">استخدام</th>
+                                    <th className="text-left pb-2">نرخ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {sources.map((s) => (
+                                    <tr key={s.source} className="border-t border-slate-800">
+                                        <td className="py-2 text-slate-300">{s.source}</td>
+                                        <td className="py-2 text-left text-slate-400">
+                                            {s.applicants.toLocaleString("fa-IR")}
+                                        </td>
+                                        <td className="py-2 text-left text-slate-400">
+                                            {s.hired.toLocaleString("fa-IR")}
+                                        </td>
+                                        <td className="py-2 text-left text-green-400">
+                                            ٪{s.hire_rate.toLocaleString("fa-IR")}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </Card>
+                )}
+
                 <ChartCard title="درخواست‌ها بر اساس وضعیت">
                     <PieChart>
                         <Pie

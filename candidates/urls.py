@@ -24,6 +24,7 @@ from .views import (
     DashboardView,
     DepartmentViewSet,
     InterviewViewSet,
+    JobRequisitionViewSet,
     JobTemplateViewSet,
     JobViewSet,
     NoteViewSet,
@@ -32,10 +33,12 @@ from .views import (
     PublicApplyView,
     PublicJobDetailView,
     PublicJobListView,
+    ReportsExportView,
     ReportsView,
     ScorecardTemplateViewSet,
     TagViewSet,
     TalentPoolViewSet,
+    TaskViewSet,
     TeamView,
 )
 
@@ -69,10 +72,19 @@ recruitment_router.register(
 recruitment_router.register(
     "job-templates", JobTemplateViewSet, basename="jobtemplate"
 )
+recruitment_router.register("tasks", TaskViewSet, basename="task")
+recruitment_router.register(
+    "requisitions", JobRequisitionViewSet, basename="requisition"
+)
 
 recruitment_urls = [
     path("stats/dashboard/", DashboardView.as_view(), name="dashboard"),
     path("stats/reports/", ReportsView.as_view(), name="reports"),
+    path(
+        "stats/reports/export/",
+        ReportsExportView.as_view(),
+        name="reports-export",
+    ),
     path("public/jobs/", PublicJobListView.as_view(), name="public-jobs"),
     path("public/jobs/<str:slug>/", PublicJobDetailView.as_view(), name="public-job"),
     path("public/apply/", PublicApplyView.as_view(), name="public-apply"),

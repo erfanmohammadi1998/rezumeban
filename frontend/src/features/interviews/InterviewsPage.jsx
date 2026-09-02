@@ -14,7 +14,7 @@ import {
     ErrorState,
 } from "../../components/ui";
 import FilterBar from "../../components/FilterBar";
-import { Field, Input, Select, Textarea } from "../../components/ui/form";
+import { Field, Input, Select, Textarea, Checkbox } from "../../components/ui/form";
 import Modal from "../../components/ui/Modal";
 import Avatar from "../../components/ui/Avatar";
 import {
@@ -36,6 +36,7 @@ function ScheduleModal({ open, onClose, onSaved }) {
         duration_minutes: 60,
         location: "",
     });
+    const [sendInvite, setSendInvite] = useState(true);
     const [saving, setSaving] = useState(false);
 
     const { data: jobs } = useAsync(
@@ -60,8 +61,11 @@ function ScheduleModal({ open, onClose, onSaved }) {
                 scheduled_at: new Date(form.scheduled_at).toISOString(),
                 duration_minutes: Number(form.duration_minutes) || 60,
                 location: form.location,
+                send_invite: sendInvite,
             });
-            toast.success("مصاحبه ثبت شد");
+            toast.success(
+                sendInvite ? "مصاحبه ثبت و دعوت‌نامه ارسال شد" : "مصاحبه ثبت شد"
+            );
             onSaved();
             onClose();
         } catch {
@@ -168,6 +172,11 @@ function ScheduleModal({ open, onClose, onSaved }) {
                         }
                     />
                 </Field>
+                <Checkbox
+                    label="ارسال دعوت‌نامه به کاندیدا و مصاحبه‌گران (ایمیل + فایل تقویم)"
+                    checked={sendInvite}
+                    onChange={(e) => setSendInvite(e.target.checked)}
+                />
             </form>
         </Modal>
     );

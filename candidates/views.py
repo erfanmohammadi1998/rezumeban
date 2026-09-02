@@ -19,6 +19,7 @@ from .models import (
     Department,
     Interview,
     Job,
+    JobRequisition,
     JobTemplate,
     Note,
     Offer,
@@ -26,6 +27,7 @@ from .models import (
     ScorecardTemplate,
     Tag,
     TalentPool,
+    Task,
 )
 from .serializers import (
     ActivitySerializer,
@@ -36,6 +38,7 @@ from .serializers import (
     ChangePasswordSerializer,
     DepartmentSerializer,
     InterviewSerializer,
+    JobRequisitionSerializer,
     JobSerializer,
     JobTemplateSerializer,
     NoteSerializer,
@@ -49,6 +52,7 @@ from .serializers import (
     TagSerializer,
     TalentPoolDetailSerializer,
     TalentPoolSerializer,
+    TaskSerializer,
     UserSerializer,
 )
 
@@ -58,6 +62,28 @@ def log_activity(actor, verb, **kwargs):
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         verb=verb,
         **kwargs,
+    )
+
+
+def _notify_mentions(actor, text, candidate):
+    """Email any @username mentioned in a note body."""
+    import re
+
+    usernames = set(re.findall(r"@([A-Za-z0-9_.-]{2,30})", text or ""))
+    if not usernames:
+        return
+    users = User.objects.filter(
+        username__in=usernames, is_active=True
+    ).exclude(id=getattr(actor, "id", None))
+    for u in users:
+        log_activity(
+            actor, f"@{u.username} در یادداشت «{candidate.full_name}» منشن شد",
+            candidate=candidate,
+        )
+    notifications.team_email(
+        users,
+        f"در یادداشتی برای «{candidate.full_name}» منشن شدید",
+        f"{getattr(actor, 'get_full_name', lambda: '')() or actor} شما را منشن کرد:\n\n{text}",
     )
 
 
@@ -72,7 +98,10 @@ class RegisterView(generics.CreateAPIView):
 
 class MeView(APIView):
     def get(self, request):
-        return Response(UserSerializer(request.user).data)
+        data = UserSerializer(request.user).data
+        data["is_staff"] = request.user.is_staff
+        data["is_superuser"] = request.user.is_superuser
+        return Response(data)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):
@@ -442,6 +471,7 @@ class CandidateViewSet(viewsets.ModelViewSet):
         log_activity(
             request.user, f"یادداشتی برای «{candidate.full_name}» ثبت شد", candidate=candidate
         )
+        _notify_mentions(request.user, note.body, candidate)
         return Response(NoteSerializer(note).data, status=status.HTTP_201_CREATED)
 
 
@@ -644,6 +674,8 @@ class InterviewViewSet(viewsets.ModelViewSet):
             job=interview.application.job,
             application=interview.application,
         )
+        if str(self.request.data.get("send_invite", "")).lower() in ("1", "true", "on"):
+            notifications.interview_invite(interview)
 
     def perform_update(self, serializer):
         interview = serializer.save()
@@ -654,6 +686,28 @@ class InterviewViewSet(viewsets.ModelViewSet):
                 candidate=interview.application.candidate,
                 application=interview.application,
             )
+
+    @action(detail=True, methods=["post"])
+    def invite(self, request, pk=None):
+        interview = self.get_object()
+        notifications.interview_invite(interview)
+        log_activity(
+            request.user,
+            f"دعوت مصاحبه «{interview.title}» ارسال شد",
+            candidate=interview.application.candidate,
+            application=interview.application,
+        )
+        return Response({"detail": "دعوت‌نامه‌ها ارسال شد."})
+
+    @action(detail=True, methods=["get"])
+    def ics(self, request, pk=None):
+        from django.http import HttpResponse
+
+        interview = self.get_object()
+        text = notifications.build_interview_ics(interview)
+        resp = HttpResponse(text, content_type="text/calendar; charset=utf-8")
+        resp["Content-Disposition"] = f'attachment; filename="interview-{interview.id}.ics"'
+        return resp
 
 
 # --------------------------------------------------------------------------- #
@@ -767,6 +821,150 @@ class TalentPoolViewSet(viewsets.ModelViewSet):
         ids = request.data.get("candidate_ids") or []
         pool.candidates.remove(*Candidate.objects.filter(id__in=ids))
         return Response({"count": pool.candidates.count()})
+
+
+# --------------------------------------------------------------------------- #
+#  Tasks / requisitions
+# --------------------------------------------------------------------------- #
+class TaskViewSet(viewsets.ModelViewSet):
+    queryset = Task.objects.select_related(
+        "assignee", "created_by", "candidate", "job"
+    )
+    serializer_class = TaskSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["assignee", "done", "candidate", "job"]
+    ordering_fields = ["due_date", "created_at"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if self.request.query_params.get("mine") == "true":
+            qs = qs.filter(assignee=self.request.user)
+        if self.request.query_params.get("overdue") == "true":
+            qs = qs.filter(done=False, due_date__lt=timezone.localdate())
+        return qs
+
+    def perform_create(self, serializer):
+        task = serializer.save(created_by=self.request.user)
+        if not task.assignee_id:
+            task.assignee = self.request.user
+            task.save(update_fields=["assignee"])
+        if task.assignee and task.assignee != self.request.user:
+            notifications.team_email(
+                [task.assignee],
+                f"وظیفهٔ جدید: {task.title}",
+                f"{self.request.user} وظیفه‌ای به شما محول کرد"
+                + (f" (مهلت {task.due_date})" if task.due_date else "")
+                + f":\n\n{task.description or task.title}",
+            )
+
+    def perform_update(self, serializer):
+        was_done = serializer.instance.done
+        task = serializer.save()
+        if task.done and not was_done:
+            task.done_at = timezone.now()
+            task.save(update_fields=["done_at"])
+        elif not task.done and was_done:
+            task.done_at = None
+            task.save(update_fields=["done_at"])
+
+    @action(detail=True, methods=["post"])
+    def toggle(self, request, pk=None):
+        task = self.get_object()
+        task.done = not task.done
+        task.done_at = timezone.now() if task.done else None
+        task.save(update_fields=["done", "done_at"])
+        return Response(TaskSerializer(task).data)
+
+
+class JobRequisitionViewSet(viewsets.ModelViewSet):
+    queryset = JobRequisition.objects.select_related(
+        "department", "requested_by", "reviewed_by", "job"
+    )
+    serializer_class = JobRequisitionSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "department", "urgency"]
+    ordering_fields = ["created_at", "target_start"]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        # staff / superusers review everything; others see their own only
+        if not (user.is_staff or user.is_superuser):
+            qs = qs.filter(requested_by=user)
+        return qs
+
+    def perform_create(self, serializer):
+        req = serializer.save(requested_by=self.request.user)
+        if str(self.request.data.get("submit", "")).lower() in ("1", "true", "on"):
+            req.status = JobRequisition.STATUS_SUBMITTED
+            req.save(update_fields=["status"])
+            self._notify_reviewers(req)
+
+    def _notify_reviewers(self, req):
+        reviewers = User.objects.filter(is_active=True, is_staff=True)
+        notifications.team_email(
+            reviewers,
+            f"درخواست جذب نیرو: {req.title}",
+            f"{req.requested_by} درخواست جذب «{req.title}» "
+            f"({req.headcount} نفر، فوریت: {req.get_urgency_display()}) را ثبت کرد.\n\n"
+            f"دلیل: {req.reason}",
+        )
+
+    @action(detail=True, methods=["post"])
+    def submit(self, request, pk=None):
+        req = self.get_object()
+        req.status = JobRequisition.STATUS_SUBMITTED
+        req.save(update_fields=["status", "updated_at"])
+        self._notify_reviewers(req)
+        return Response(JobRequisitionSerializer(req).data)
+
+    def _review(self, req, new_status, note):
+        req.status = new_status
+        req.review_note = note or ""
+        req.reviewed_by = self.request.user
+        req.reviewed_at = timezone.now()
+        req.save()
+        if req.requested_by and req.requested_by.email:
+            notifications.team_email(
+                [req.requested_by],
+                f"درخواست جذب «{req.title}» — {req.get_status_display()}",
+                f"وضعیت درخواست شما: {req.get_status_display()}"
+                + (f"\nیادداشت: {note}" if note else ""),
+            )
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        req = self.get_object()
+        self._review(req, JobRequisition.STATUS_APPROVED, request.data.get("note"))
+        # optionally spin up a draft job
+        if str(request.data.get("create_job", "")).lower() in ("1", "true", "on"):
+            job = Job.objects.create(
+                title=req.title,
+                department=req.department,
+                employment_type=req.employment_type,
+                openings=req.headcount,
+                requirements=req.requirements,
+                description=req.reason,
+                status=Job.STATUS_DRAFT,
+                hiring_manager=req.requested_by,
+            )
+            req.job = job
+            req.save(update_fields=["job"])
+        log_activity(request.user, f"درخواست جذب «{req.title}» تأیید شد")
+        return Response(JobRequisitionSerializer(req).data)
+
+    @action(detail=True, methods=["post"])
+    def reject(self, request, pk=None):
+        req = self.get_object()
+        self._review(req, JobRequisition.STATUS_REJECTED, request.data.get("note"))
+        log_activity(request.user, f"درخواست جذب «{req.title}» رد شد")
+        return Response(JobRequisitionSerializer(req).data)
+
+    @action(detail=True, methods=["post"])
+    def hold(self, request, pk=None):
+        req = self.get_object()
+        self._review(req, JobRequisition.STATUS_ON_HOLD, request.data.get("note"))
+        return Response(JobRequisitionSerializer(req).data)
 
 
 # --------------------------------------------------------------------------- #
@@ -912,6 +1110,9 @@ class ReportsView(APIView):
         ]
         avg_time_to_hire = round(sum(durations) / len(durations), 1) if durations else 0
 
+        funnel, time_in_stage = _hiring_funnel()
+        sources = _source_effectiveness()
+
         return Response(
             {
                 "jobs_by_department": jobs_by_dept,
@@ -921,8 +1122,111 @@ class ReportsView(APIView):
                 "rating_distribution": rating_distribution,
                 "avg_time_to_hire": avg_time_to_hire,
                 "total_hires": hired.count(),
+                "funnel": funnel,
+                "time_in_stage": time_in_stage,
+                "source_effectiveness": sources,
             }
         )
+
+
+def _hiring_funnel():
+    """For each pipeline stage: how many applications ever reached it, and the
+    average number of days spent in that stage (from stage history)."""
+    stages = list(PipelineStage.objects.order_by("order", "id"))
+    reached = {s.id: 0 for s in stages}
+    durations = {s.id: [] for s in stages}
+
+    histories = (
+        ApplicationStageHistory.objects.select_related("to_stage", "from_stage")
+        .order_by("application_id", "created_at")
+    )
+    by_app = {}
+    for h in histories:
+        by_app.setdefault(h.application_id, []).append(h)
+
+    for entries in by_app.values():
+        for i, h in enumerate(entries):
+            if h.to_stage_id in reached:
+                reached[h.to_stage_id] += 1
+                left = (
+                    entries[i + 1].created_at
+                    if i + 1 < len(entries)
+                    else timezone.now()
+                )
+                durations[h.to_stage_id].append((left - h.created_at).days)
+
+    funnel = [
+        {
+            "stage": s.name,
+            "kind": s.kind,
+            "order": s.order,
+            "reached": reached[s.id],
+            "current": s.applications.count(),
+        }
+        for s in stages
+    ]
+    time_in_stage = [
+        {
+            "stage": s.name,
+            "avg_days": round(sum(durations[s.id]) / len(durations[s.id]), 1)
+            if durations[s.id]
+            else 0,
+        }
+        for s in stages
+    ]
+    return funnel, time_in_stage
+
+
+def _source_effectiveness():
+    rows = (
+        Application.objects.values("source")
+        .annotate(
+            applicants=Count("id"),
+            hired=Count("id", filter=Q(status=Application.STATUS_HIRED)),
+        )
+        .order_by("-applicants")
+    )
+    out = []
+    for r in rows:
+        applicants = r["applicants"] or 0
+        out.append(
+            {
+                "source": r["source"] or "نامشخص",
+                "applicants": applicants,
+                "hired": r["hired"],
+                "hire_rate": round(100 * r["hired"] / applicants, 1) if applicants else 0,
+            }
+        )
+    return out
+
+
+class ReportsExportView(APIView):
+    def get(self, request):
+        import csv
+
+        from django.http import HttpResponse
+
+        funnel, time_in_stage = _hiring_funnel()
+        tis = {t["stage"]: t["avg_days"] for t in time_in_stage}
+        resp = HttpResponse(content_type="text/csv; charset=utf-8-sig")
+        resp["Content-Disposition"] = 'attachment; filename="hiring-funnel.csv"'
+        w = csv.writer(resp)
+        w.writerow(["مرحله", "نوع", "تعداد کل ورودی", "اکنون در این مرحله", "میانگین روز"])
+        for row in funnel:
+            w.writerow(
+                [
+                    row["stage"],
+                    row["kind"],
+                    row["reached"],
+                    row["current"],
+                    tis.get(row["stage"], 0),
+                ]
+            )
+        w.writerow([])
+        w.writerow(["منبع", "تعداد", "استخدام‌شده", "نرخ استخدام ٪"])
+        for s in _source_effectiveness():
+            w.writerow([s["source"], s["applicants"], s["hired"], s["hire_rate"]])
+        return resp
 
 
 class ActivityView(generics.ListAPIView):

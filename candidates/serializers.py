@@ -12,6 +12,7 @@ from .models import (
     Education,
     Interview,
     Job,
+    JobRequisition,
     JobTemplate,
     Note,
     Offer,
@@ -20,6 +21,7 @@ from .models import (
     Skill,
     Tag,
     TalentPool,
+    Task,
     WorkExperience,
 )
 
@@ -356,6 +358,14 @@ class JobSerializer(serializers.ModelSerializer):
         allow_null=True,
         source="hiring_manager",
     )
+    collaborators = UserSerializer(many=True, read_only=True)
+    collaborator_ids = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        many=True,
+        write_only=True,
+        required=False,
+        source="collaborators",
+    )
     application_count = serializers.IntegerField(
         source="applications.count", read_only=True
     )
@@ -386,6 +396,8 @@ class JobSerializer(serializers.ModelSerializer):
             "status_display",
             "hiring_manager",
             "hiring_manager_id",
+            "collaborators",
+            "collaborator_ids",
             "published_at",
             "application_count",
             "active_application_count",
@@ -750,4 +762,96 @@ class JobTemplateSerializer(serializers.ModelSerializer):
             "description",
             "requirements",
             "created_at",
+        )
+
+
+# --------------------------------------------------------------------------- #
+#  Tasks / requisitions
+# --------------------------------------------------------------------------- #
+class TaskSerializer(serializers.ModelSerializer):
+    assignee = UserSerializer(read_only=True)
+    assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+        source="assignee",
+    )
+    created_by = UserSerializer(read_only=True)
+    candidate_name = serializers.CharField(
+        source="candidate.full_name", read_only=True, default=None
+    )
+    job_title = serializers.CharField(
+        source="job.title", read_only=True, default=None
+    )
+    job_slug = serializers.CharField(source="job.slug", read_only=True, default=None)
+
+    class Meta:
+        model = Task
+        fields = (
+            "id",
+            "title",
+            "description",
+            "assignee",
+            "assignee_id",
+            "created_by",
+            "due_date",
+            "done",
+            "done_at",
+            "candidate",
+            "candidate_name",
+            "job",
+            "job_title",
+            "job_slug",
+            "created_at",
+        )
+        read_only_fields = ("done_at",)
+
+
+class JobRequisitionSerializer(serializers.ModelSerializer):
+    department = DepartmentSerializer(read_only=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+        source="department",
+    )
+    requested_by = UserSerializer(read_only=True)
+    reviewed_by = UserSerializer(read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    urgency_display = serializers.CharField(
+        source="get_urgency_display", read_only=True
+    )
+    job_slug = serializers.CharField(source="job.slug", read_only=True, default=None)
+
+    class Meta:
+        model = JobRequisition
+        fields = (
+            "id",
+            "title",
+            "department",
+            "department_id",
+            "headcount",
+            "employment_type",
+            "reason",
+            "requirements",
+            "urgency",
+            "urgency_display",
+            "target_start",
+            "requested_by",
+            "status",
+            "status_display",
+            "reviewed_by",
+            "review_note",
+            "reviewed_at",
+            "job",
+            "job_slug",
+            "created_at",
+        )
+        read_only_fields = (
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "job",
         )

@@ -113,6 +113,29 @@ export const interviewsApi = {
     create: (data) => api.post("interviews/", data).then(unwrap),
     update: (id, data) => api.patch(`interviews/${id}/`, data).then(unwrap),
     remove: (id) => api.delete(`interviews/${id}/`),
+    invite: (id) => api.post(`interviews/${id}/invite/`).then(unwrap),
+    icsUrl: (id) => `${API_BASE}interviews/${id}/ics/`,
+};
+
+export const tasksApi = {
+    list: (params) => api.get("tasks/", { params }).then(unwrap),
+    create: (data) => api.post("tasks/", data).then(unwrap),
+    update: (id, data) => api.patch(`tasks/${id}/`, data).then(unwrap),
+    remove: (id) => api.delete(`tasks/${id}/`),
+    toggle: (id) => api.post(`tasks/${id}/toggle/`).then(unwrap),
+};
+
+export const requisitionsApi = {
+    list: (params) => api.get("requisitions/", { params }).then(unwrap),
+    get: (id) => api.get(`requisitions/${id}/`).then(unwrap),
+    create: (data) => api.post("requisitions/", data).then(unwrap),
+    update: (id, data) => api.patch(`requisitions/${id}/`, data).then(unwrap),
+    remove: (id) => api.delete(`requisitions/${id}/`),
+    submit: (id) => api.post(`requisitions/${id}/submit/`).then(unwrap),
+    approve: (id, data) =>
+        api.post(`requisitions/${id}/approve/`, data).then(unwrap),
+    reject: (id, data) => api.post(`requisitions/${id}/reject/`, data).then(unwrap),
+    hold: (id, data) => api.post(`requisitions/${id}/hold/`, data).then(unwrap),
 };
 
 export const metaApi = {
@@ -164,6 +187,8 @@ export const statsApi = {
     dashboard: () => api.get("stats/dashboard/").then(unwrap),
     candidates: () => api.get("stats/candidates/").then(unwrap),
     reports: () => api.get("stats/reports/").then(unwrap),
+    reportsExport: () =>
+        api.get("stats/reports/export/", { responseType: "blob" }),
 };
 
 export const publicApi = {

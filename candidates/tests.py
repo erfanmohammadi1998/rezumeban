@@ -339,6 +339,87 @@ class OfferPoolScorecardTemplateTests(APITestCase):
         self.assertIn(self.cand.email, mail.outbox[0].to)
 
 
+class TaskRequisitionTests(APITestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user("mgr", password="pw12345678")
+        self.admin = User.objects.create_user(
+            "boss", password="pw12345678", is_staff=True, email="boss@x.com"
+        )
+        self.client.force_authenticate(self.manager)
+
+    def test_task_autoassigns_and_toggles(self):
+        res = self.client.post("/api/tasks/", {"title": "پیگیری"}, format="json")
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["assignee"]["username"], "mgr")
+        tid = res.data["id"]
+        res = self.client.post(f"/api/tasks/{tid}/toggle/")
+        self.assertTrue(res.data["done"])
+        self.assertIsNotNone(res.data["done_at"])
+
+        res = self.client.get("/api/tasks/?mine=true")
+        self.assertEqual(res.data["count"], 1)
+
+    def test_requisition_submit_review_and_scoping(self):
+        from django.core import mail
+
+        res = self.client.post(
+            "/api/requisitions/",
+            {"title": "کارشناس", "headcount": 2, "reason": "رشد", "submit": True},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.data["status"], "submitted")
+        req_id = res.data["id"]
+        self.assertTrue(any("درخواست جذب" in m.subject for m in mail.outbox))
+
+        # the manager (non-staff) can only see their own
+        self.assertEqual(self.client.get("/api/requisitions/").data["count"], 1)
+
+        # admin reviews & converts to a job
+        self.client.force_authenticate(self.admin)
+        res = self.client.post(
+            f"/api/requisitions/{req_id}/approve/",
+            {"note": "ok", "create_job": True},
+            format="json",
+        )
+        self.assertEqual(res.data["status"], "approved")
+        self.assertIsNotNone(res.data["job"])
+        self.assertTrue(Job.objects.filter(title="کارشناس", status="draft").exists())
+
+    def test_reports_include_funnel_and_export(self):
+        self.client.force_authenticate(self.admin)
+        res = self.client.get("/api/stats/reports/")
+        for key in ("funnel", "time_in_stage", "source_effectiveness"):
+            self.assertIn(key, res.data)
+        exp = self.client.get("/api/stats/reports/export/")
+        self.assertEqual(exp.status_code, 200)
+        self.assertIn("text/csv", exp["Content-Type"])
+
+    def test_interview_ics_and_note_mention(self):
+        from django.core import mail
+
+        job = Job.objects.create(title="R", status="open")
+        cand = Candidate.objects.create(
+            first_name="C", last_name="D", email="cd@x.com"
+        )
+        app = Application.objects.create(candidate=cand, job=job)
+        iv = Interview.objects.create(
+            application=app, scheduled_at=timezone.now() + timedelta(days=1)
+        )
+        res = self.client.get(f"/api/interviews/{iv.id}/ics/")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"BEGIN:VCALENDAR", res.content)
+
+        mail.outbox.clear()
+        res = self.client.post(
+            f"/api/candidates/{cand.id}/notes/",
+            {"body": "لطفاً @boss این را ببیند"},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertTrue(any("منشن" in m.subject for m in mail.outbox))
+
+
 class PublicPortalTests(APITestCase):
     def setUp(self):
         PipelineStage.objects.create(name="New", order=1, kind="active")

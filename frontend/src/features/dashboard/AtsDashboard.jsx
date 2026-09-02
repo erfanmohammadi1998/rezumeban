@@ -5,6 +5,7 @@ import {
     GitPullRequest,
     CalendarClock,
     Trophy,
+    Square,
     Activity as ActivityIcon,
 } from "lucide-react";
 import {
@@ -17,7 +18,7 @@ import {
     CartesianGrid,
 } from "recharts";
 
-import { statsApi } from "../../api/client";
+import { statsApi, tasksApi } from "../../api/client";
 import useAsync from "../../hooks/useAsync";
 import {
     Card,
@@ -27,7 +28,7 @@ import {
     ErrorState,
 } from "../../components/ui";
 import Avatar from "../../components/ui/Avatar";
-import { fmtNum, fmtRelative, fmtDateTime } from "../../lib/format";
+import { fmtNum, fmtRelative, fmtDateTime, fmtDate } from "../../lib/format";
 
 function StatCard({ icon: Icon, label, value, tone = "blue" }) {
     const tones = {
@@ -45,6 +46,57 @@ function StatCard({ icon: Icon, label, value, tone = "blue" }) {
             <div>
                 <div className="text-2xl font-bold text-slate-100">{value}</div>
                 <div className="text-sm text-slate-500">{label}</div>
+            </div>
+        </Card>
+    );
+}
+
+function MyTasks() {
+    const { data, reload } = useAsync(
+        () => tasksApi.list({ mine: "true", done: "false" }),
+        []
+    );
+    const tasks = (data?.results || data || []).slice(0, 6);
+    if (!tasks.length) return null;
+    return (
+        <Card className="p-6">
+            <SectionTitle
+                action={
+                    <Link to="/tasks" className="text-sm text-blue-400 hover:text-blue-300">
+                        همه
+                    </Link>
+                }
+            >
+                کارهای من
+            </SectionTitle>
+            <div className="divide-y divide-slate-800">
+                {tasks.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 py-2.5">
+                        <button
+                            onClick={async () => {
+                                await tasksApi.toggle(t.id);
+                                reload();
+                            }}
+                            className="text-slate-500 hover:text-green-400"
+                        >
+                            <Square size={16} />
+                        </button>
+                        <span className="text-sm text-slate-200 flex-1 truncate">
+                            {t.title}
+                        </span>
+                        {t.due_date && (
+                            <span
+                                className={`text-xs ${
+                                    new Date(t.due_date) < new Date(new Date().toDateString())
+                                        ? "text-red-400"
+                                        : "text-slate-500"
+                                }`}
+                            >
+                                {fmtDate(t.due_date)}
+                            </span>
+                        )}
+                    </div>
+                ))}
             </div>
         </Card>
     );
@@ -199,6 +251,8 @@ export default function AtsDashboard() {
                     )}
                 </Card>
             </div>
+
+            <MyTasks />
 
             <Card className="p-6">
                 <SectionTitle>فعالیت‌های اخیر</SectionTitle>

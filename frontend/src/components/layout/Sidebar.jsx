@@ -13,6 +13,8 @@ import {
     Globe,
     FileSignature,
     FolderOpen,
+    CheckSquare,
+    ClipboardList,
     X,
 } from "lucide-react";
 
@@ -21,10 +23,12 @@ import { MODULES, APP_NAME, APP_TAGLINE } from "../../config/modules";
 const ALL_ITEMS = [
     { to: "/", label: "داشبورد", icon: LayoutDashboard, module: "dashboard", end: true },
     { to: "/candidates", label: "کاندیداها", icon: Users, module: "candidates" },
+    { to: "/requisitions", label: "درخواست جذب نیرو", icon: ClipboardList, module: "jobs" },
     { to: "/jobs", label: "آگهی‌های شغلی", icon: Briefcase, module: "jobs" },
     { to: "/pipeline", label: "پایپ‌لاین استخدام", icon: KanbanSquare, module: "pipeline" },
     { to: "/offers", label: "پیشنهادها", icon: FileSignature, module: "pipeline" },
     { to: "/interviews", label: "مصاحبه‌ها", icon: CalendarClock, module: "interviews" },
+    { to: "/tasks", label: "وظایف", icon: CheckSquare, module: "candidates" },
     { to: "/pools", label: "استخر استعداد", icon: FolderOpen, module: "candidates" },
     { to: "/sourcing", label: "منبع‌یابی", icon: Radar, module: "sourcing" },
     { to: "/reports", label: "گزارش‌ها", icon: BarChart3, module: "reports" },

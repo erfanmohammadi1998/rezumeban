@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { jobsApi, metaApi } from "../../api/client";
+import { jobsApi, metaApi, authApi } from "../../api/client";
 import { useToast } from "../../context/ToastContext";
 import Modal from "../../components/ui/Modal";
 import { Button } from "../../components/ui";
@@ -19,6 +19,8 @@ const EMPTY = {
     salary_max: "",
     description: "",
     requirements: "",
+    hiring_manager_id: "",
+    collaborator_ids: [],
 };
 
 function fromJob(j) {
@@ -28,6 +30,8 @@ function fromJob(j) {
         department_id: j.department?.id ?? "",
         salary_min: j.salary_min ?? "",
         salary_max: j.salary_max ?? "",
+        hiring_manager_id: j.hiring_manager?.id ?? "",
+        collaborator_ids: (j.collaborators || []).map((u) => u.id),
     };
 }
 
@@ -50,9 +54,11 @@ export default function JobForm({ open, onClose, job, onSaved }) {
     }
 
     const [templates, setTemplates] = useState([]);
+    const [team, setTeam] = useState([]);
     useEffect(() => {
         if (open) {
             metaApi.departments().then(setDepartments).catch(() => {});
+            authApi.team().then(setTeam).catch(() => setTeam([]));
             if (!job)
                 metaApi.jobTemplates().then(setTemplates).catch(() => setTemplates([]));
         }
@@ -92,6 +98,8 @@ export default function JobForm({ open, onClose, job, onSaved }) {
             salary_max: clean(form.salary_max),
             description: form.description,
             requirements: form.requirements,
+            hiring_manager_id: clean(form.hiring_manager_id),
+            collaborator_ids: form.collaborator_ids,
         };
         try {
             const saved = editing
@@ -238,6 +246,59 @@ export default function JobForm({ open, onClose, job, onSaved }) {
                         onChange={field}
                     />
                 </Field>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                    <Field label="مدیر استخدام">
+                        <Select
+                            name="hiring_manager_id"
+                            value={form.hiring_manager_id}
+                            onChange={field}
+                        >
+                            <option value="">—</option>
+                            {team.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                    {u.full_name || u.username}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                </div>
+
+                {team.length > 0 && (
+                    <div>
+                        <label className="block text-sm text-slate-300 mb-2">
+                            همکاران این آگهی
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                            {team.map((u) => {
+                                const on = form.collaborator_ids.includes(u.id);
+                                return (
+                                    <button
+                                        key={u.id}
+                                        type="button"
+                                        onClick={() =>
+                                            setForm((f) => ({
+                                                ...f,
+                                                collaborator_ids: on
+                                                    ? f.collaborator_ids.filter(
+                                                          (x) => x !== u.id
+                                                      )
+                                                    : [...f.collaborator_ids, u.id],
+                                            }))
+                                        }
+                                        className={`px-3 py-1 rounded-full text-xs border transition ${
+                                            on
+                                                ? "bg-blue-600 border-blue-500 text-white"
+                                                : "border-slate-700 text-slate-400 hover:border-slate-500"
+                                        }`}
+                                    >
+                                        {u.full_name || u.username}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </form>
         </Modal>
     );

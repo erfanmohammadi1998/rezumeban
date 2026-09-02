@@ -23,6 +23,8 @@ import ReportsPage from "./features/reports/ReportsPage";
 import SourcingPage from "./features/sourcing/SourcingPage";
 import OffersPage from "./features/offers/OffersPage";
 import PoolsPage from "./features/pools/PoolsPage";
+import TasksPage from "./features/tasks/TasksPage";
+import RequisitionsPage from "./features/requisitions/RequisitionsPage";
 
 import PortalLayout from "./features/portal/PortalLayout";
 import PortalJobsPage from "./features/portal/PortalJobsPage";
@@ -54,6 +56,7 @@ function App() {
                 <Route path="/candidates/duplicates" element={<DuplicatesPage />} />
                 <Route path="/candidates/:id" element={<CandidateDetailPage />} />
                 <Route path="/pools" element={<PoolsPage />} />
+                <Route path="/tasks" element={<TasksPage />} />
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/guide" element={<GuidePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
@@ -62,6 +65,7 @@ function App() {
                     <>
                         <Route path="/jobs" element={<JobsPage />} />
                         <Route path="/jobs/:slug" element={<JobDetailPage />} />
+                        <Route path="/requisitions" element={<RequisitionsPage />} />
                     </>
                 )}
                 {MODULES.pipeline && (

@@ -113,6 +113,9 @@ class Job(TimeStampedModel):
         on_delete=models.SET_NULL,
         related_name="managed_jobs",
     )
+    collaborators = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name="collaborating_jobs"
+    )
     published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
@@ -626,3 +629,105 @@ class JobTemplate(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class Task(TimeStampedModel):
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, default="")
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_tasks",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    due_date = models.DateField(null=True, blank=True)
+    done = models.BooleanField(default=False)
+    done_at = models.DateTimeField(null=True, blank=True)
+    candidate = models.ForeignKey(
+        Candidate, null=True, blank=True, on_delete=models.CASCADE, related_name="tasks"
+    )
+    job = models.ForeignKey(
+        Job, null=True, blank=True, on_delete=models.CASCADE, related_name="tasks"
+    )
+
+    class Meta:
+        ordering = ["done", "due_date", "-created_at"]
+
+    def __str__(self):
+        return self.title
+
+
+class JobRequisition(TimeStampedModel):
+    STATUS_DRAFT = "draft"
+    STATUS_SUBMITTED = "submitted"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_ON_HOLD = "on_hold"
+    STATUSES = (
+        (STATUS_DRAFT, "پیش‌نویس"),
+        (STATUS_SUBMITTED, "ارسال‌شده"),
+        (STATUS_APPROVED, "تأییدشده"),
+        (STATUS_REJECTED, "رد شده"),
+        (STATUS_ON_HOLD, "در انتظار"),
+    )
+    URGENCIES = (
+        ("low", "عادی"),
+        ("normal", "متوسط"),
+        ("high", "فوری"),
+    )
+
+    title = models.CharField(max_length=200)
+    department = models.ForeignKey(
+        Department,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="requisitions",
+    )
+    headcount = models.PositiveIntegerField(default=1)
+    employment_type = models.CharField(
+        max_length=20, choices=Job.EMPLOYMENT_TYPES, default="full_time"
+    )
+    reason = models.TextField(blank=True, default="")
+    requirements = models.TextField(blank=True, default="")
+    urgency = models.CharField(max_length=10, choices=URGENCIES, default="normal")
+    target_start = models.DateField(null=True, blank=True)
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="requisitions",
+    )
+    status = models.CharField(max_length=20, choices=STATUSES, default=STATUS_DRAFT)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    review_note = models.TextField(blank=True, default="")
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    job = models.ForeignKey(
+        Job,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="requisition",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.get_status_display()})"
