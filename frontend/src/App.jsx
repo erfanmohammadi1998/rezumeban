@@ -21,6 +21,8 @@ import PipelinePage from "./features/pipeline/PipelinePage";
 import InterviewsPage from "./features/interviews/InterviewsPage";
 import ReportsPage from "./features/reports/ReportsPage";
 import SourcingPage from "./features/sourcing/SourcingPage";
+import OffersPage from "./features/offers/OffersPage";
+import PoolsPage from "./features/pools/PoolsPage";
 
 import PortalLayout from "./features/portal/PortalLayout";
 import PortalJobsPage from "./features/portal/PortalJobsPage";
@@ -51,6 +53,7 @@ function App() {
                 <Route path="/candidates/compare" element={<ComparePage />} />
                 <Route path="/candidates/duplicates" element={<DuplicatesPage />} />
                 <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+                <Route path="/pools" element={<PoolsPage />} />
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/guide" element={<GuidePage />} />
                 <Route path="/settings" element={<SettingsPage />} />
@@ -62,7 +65,10 @@ function App() {
                     </>
                 )}
                 {MODULES.pipeline && (
-                    <Route path="/pipeline" element={<PipelinePage />} />
+                    <>
+                        <Route path="/pipeline" element={<PipelinePage />} />
+                        <Route path="/offers" element={<OffersPage />} />
+                    </>
                 )}
                 {MODULES.interviews && (
                     <Route path="/interviews" element={<InterviewsPage />} />

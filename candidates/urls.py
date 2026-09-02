@@ -24,14 +24,18 @@ from .views import (
     DashboardView,
     DepartmentViewSet,
     InterviewViewSet,
+    JobTemplateViewSet,
     JobViewSet,
     NoteViewSet,
+    OfferViewSet,
     PipelineStageViewSet,
     PublicApplyView,
     PublicJobDetailView,
     PublicJobListView,
     ReportsView,
+    ScorecardTemplateViewSet,
     TagViewSet,
+    TalentPoolViewSet,
     TeamView,
 )
 
@@ -56,6 +60,14 @@ recruitment_router.register("interviews", InterviewViewSet, basename="interview"
 recruitment_router.register("departments", DepartmentViewSet, basename="department")
 recruitment_router.register(
     "pipeline-stages", PipelineStageViewSet, basename="pipelinestage"
+)
+recruitment_router.register("offers", OfferViewSet, basename="offer")
+recruitment_router.register("talent-pools", TalentPoolViewSet, basename="talentpool")
+recruitment_router.register(
+    "scorecards", ScorecardTemplateViewSet, basename="scorecard"
+)
+recruitment_router.register(
+    "job-templates", JobTemplateViewSet, basename="jobtemplate"
 )
 
 recruitment_urls = [

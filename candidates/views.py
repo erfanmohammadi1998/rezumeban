@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from . import notifications
 from .models import (
     Activity,
     Application,
@@ -18,9 +19,13 @@ from .models import (
     Department,
     Interview,
     Job,
+    JobTemplate,
     Note,
+    Offer,
     PipelineStage,
+    ScorecardTemplate,
     Tag,
+    TalentPool,
 )
 from .serializers import (
     ActivitySerializer,
@@ -32,13 +37,18 @@ from .serializers import (
     DepartmentSerializer,
     InterviewSerializer,
     JobSerializer,
+    JobTemplateSerializer,
     NoteSerializer,
+    OfferSerializer,
     PipelineStageSerializer,
     ProfileSerializer,
     PublicApplySerializer,
     PublicJobSerializer,
     RegisterSerializer,
+    ScorecardTemplateSerializer,
     TagSerializer,
+    TalentPoolDetailSerializer,
+    TalentPoolSerializer,
     UserSerializer,
 )
 
@@ -576,13 +586,16 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             job=application.job,
             application=application,
         )
+        if request.data.get("notify"):
+            notifications.stage_changed(application, new_stage)
         return Response(ApplicationSerializer(application).data)
 
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         application = self.get_object()
+        reason = request.data.get("reason", "")
         application.status = Application.STATUS_REJECTED
-        application.rejection_reason = request.data.get("reason", "")
+        application.rejection_reason = reason
         lost_stage = PipelineStage.objects.filter(kind=PipelineStage.KIND_LOST).first()
         if lost_stage:
             application.stage = lost_stage
@@ -594,6 +607,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             job=application.job,
             application=application,
         )
+        if request.data.get("notify"):
+            notifications.application_rejected(application, reason)
         return Response(ApplicationSerializer(application).data)
 
 
@@ -639,6 +654,119 @@ class InterviewViewSet(viewsets.ModelViewSet):
                 candidate=interview.application.candidate,
                 application=interview.application,
             )
+
+
+# --------------------------------------------------------------------------- #
+#  Scorecards / offers / talent pools / job templates
+# --------------------------------------------------------------------------- #
+class ScorecardTemplateViewSet(viewsets.ModelViewSet):
+    queryset = ScorecardTemplate.objects.all()
+    serializer_class = ScorecardTemplateSerializer
+    pagination_class = None
+
+
+class JobTemplateViewSet(viewsets.ModelViewSet):
+    queryset = JobTemplate.objects.select_related("department")
+    serializer_class = JobTemplateSerializer
+    pagination_class = None
+
+
+class OfferViewSet(viewsets.ModelViewSet):
+    queryset = Offer.objects.select_related(
+        "application__candidate", "application__job", "created_by"
+    )
+    serializer_class = OfferSerializer
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ["status", "application", "application__job"]
+    ordering_fields = ["created_at", "start_date", "expires_on"]
+
+    def perform_create(self, serializer):
+        offer = serializer.save(created_by=self.request.user)
+        log_activity(
+            self.request.user,
+            f"پیش‌نویس پیشنهاد برای «{offer.application.candidate.full_name}» ساخته شد",
+            candidate=offer.application.candidate,
+            job=offer.application.job,
+            application=offer.application,
+        )
+
+    @action(detail=True, methods=["post"])
+    def send(self, request, pk=None):
+        offer = self.get_object()
+        offer.status = Offer.STATUS_SENT
+        offer.sent_at = timezone.now()
+        offer.save(update_fields=["status", "sent_at", "updated_at"])
+        notifications.offer_sent(offer)
+        log_activity(
+            request.user,
+            f"پیشنهاد همکاری برای «{offer.application.candidate.full_name}» ارسال شد",
+            candidate=offer.application.candidate,
+            job=offer.application.job,
+            application=offer.application,
+        )
+        return Response(OfferSerializer(offer).data)
+
+    def _respond(self, offer, accepted):
+        offer.status = Offer.STATUS_ACCEPTED if accepted else Offer.STATUS_DECLINED
+        offer.responded_at = timezone.now()
+        offer.save(update_fields=["status", "responded_at", "updated_at"])
+        app = offer.application
+        if accepted:
+            won = PipelineStage.objects.filter(kind=PipelineStage.KIND_WON).first()
+            app.status = Application.STATUS_HIRED
+            if won:
+                app.stage = won
+            app.save()
+        return offer
+
+    @action(detail=True, methods=["post"])
+    def accept(self, request, pk=None):
+        offer = self._respond(self.get_object(), True)
+        log_activity(
+            request.user,
+            f"پیشنهاد «{offer.application.candidate.full_name}» پذیرفته شد",
+            candidate=offer.application.candidate,
+            application=offer.application,
+        )
+        return Response(OfferSerializer(offer).data)
+
+    @action(detail=True, methods=["post"])
+    def decline(self, request, pk=None):
+        offer = self._respond(self.get_object(), False)
+        log_activity(
+            request.user,
+            f"پیشنهاد «{offer.application.candidate.full_name}» رد شد",
+            candidate=offer.application.candidate,
+            application=offer.application,
+        )
+        return Response(OfferSerializer(offer).data)
+
+
+class TalentPoolViewSet(viewsets.ModelViewSet):
+    queryset = TalentPool.objects.select_related("owner").prefetch_related("candidates")
+    pagination_class = None
+
+    def get_serializer_class(self):
+        if self.action in ("retrieve",):
+            return TalentPoolDetailSerializer
+        return TalentPoolSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    @action(detail=True, methods=["post"])
+    def add(self, request, pk=None):
+        pool = self.get_object()
+        ids = request.data.get("candidate_ids") or []
+        pool.candidates.add(*Candidate.objects.filter(id__in=ids))
+        return Response({"count": pool.candidates.count()})
+
+    @action(detail=True, methods=["post"])
+    def remove(self, request, pk=None):
+        pool = self.get_object()
+        ids = request.data.get("candidate_ids") or []
+        pool.candidates.remove(*Candidate.objects.filter(id__in=ids))
+        return Response({"count": pool.candidates.count()})
 
 
 # --------------------------------------------------------------------------- #

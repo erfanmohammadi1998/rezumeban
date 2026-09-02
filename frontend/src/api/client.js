@@ -78,10 +78,33 @@ export const applicationsApi = {
     get: (id) => api.get(`applications/${id}/`).then(unwrap),
     create: (data) => api.post("applications/", data).then(unwrap),
     update: (id, data) => api.patch(`applications/${id}/`, data).then(unwrap),
-    move: (id, stageId, note) =>
-        api.post(`applications/${id}/move/`, { stage_id: stageId, note }).then(unwrap),
-    reject: (id, reason) =>
-        api.post(`applications/${id}/reject/`, { reason }).then(unwrap),
+    move: (id, stageId, { note, notify } = {}) =>
+        api
+            .post(`applications/${id}/move/`, { stage_id: stageId, note, notify })
+            .then(unwrap),
+    reject: (id, reason, notify) =>
+        api.post(`applications/${id}/reject/`, { reason, notify }).then(unwrap),
+};
+
+export const offersApi = {
+    list: (params) => api.get("offers/", { params }).then(unwrap),
+    create: (data) => api.post("offers/", data).then(unwrap),
+    update: (id, data) => api.patch(`offers/${id}/`, data).then(unwrap),
+    remove: (id) => api.delete(`offers/${id}/`),
+    send: (id) => api.post(`offers/${id}/send/`).then(unwrap),
+    accept: (id) => api.post(`offers/${id}/accept/`).then(unwrap),
+    decline: (id) => api.post(`offers/${id}/decline/`).then(unwrap),
+};
+
+export const talentPoolsApi = {
+    list: () => api.get("talent-pools/").then(unwrap),
+    get: (id) => api.get(`talent-pools/${id}/`).then(unwrap),
+    create: (data) => api.post("talent-pools/", data).then(unwrap),
+    remove: (id) => api.delete(`talent-pools/${id}/`),
+    add: (id, candidate_ids) =>
+        api.post(`talent-pools/${id}/add/`, { candidate_ids }).then(unwrap),
+    removeCandidates: (id, candidate_ids) =>
+        api.post(`talent-pools/${id}/remove/`, { candidate_ids }).then(unwrap),
 };
 
 export const interviewsApi = {
@@ -103,6 +126,14 @@ export const metaApi = {
     tags: () => api.get("tags/").then(unwrap),
     createTag: (data) => api.post("tags/", data).then(unwrap),
     removeTag: (id) => api.delete(`tags/${id}/`),
+    scorecards: () => api.get("scorecards/").then(unwrap),
+    createScorecard: (data) => api.post("scorecards/", data).then(unwrap),
+    updateScorecard: (id, data) =>
+        api.patch(`scorecards/${id}/`, data).then(unwrap),
+    removeScorecard: (id) => api.delete(`scorecards/${id}/`),
+    jobTemplates: () => api.get("job-templates/").then(unwrap),
+    createJobTemplate: (data) => api.post("job-templates/", data).then(unwrap),
+    removeJobTemplate: (id) => api.delete(`job-templates/${id}/`),
 };
 
 export const activityApi = {

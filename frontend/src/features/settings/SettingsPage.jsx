@@ -372,14 +372,225 @@ function TeamSection() {
     );
 }
 
+/* ------------------------------------------------------------- scorecards */
+function ScorecardsSection() {
+    const toast = useToast();
+    const { data, loading, reload } = useAsync(() => metaApi.scorecards(), []);
+    const [name, setName] = useState("");
+    const [criteria, setCriteria] = useState([{ label: "", weight: 1 }]);
+
+    const add = async (e) => {
+        e.preventDefault();
+        const clean = criteria.filter((c) => c.label.trim());
+        if (!name.trim() || !clean.length) return;
+        try {
+            await metaApi.createScorecard({ name: name.trim(), criteria: clean });
+            setName("");
+            setCriteria([{ label: "", weight: 1 }]);
+            reload();
+        } catch {
+            toast.error("افزودن کارت امتیاز ناموفق بود");
+        }
+    };
+
+    return (
+        <Card className="p-6 max-w-xl">
+            <SectionTitle>کارت‌های امتیازدهی مصاحبه</SectionTitle>
+            <form onSubmit={add} className="space-y-3 mb-5">
+                <Input
+                    placeholder="نام کارت (مثلاً: مصاحبهٔ فنی بک‌اند)"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                />
+                {criteria.map((c, i) => (
+                    <div key={i} className="flex gap-2">
+                        <Input
+                            placeholder="معیار"
+                            value={c.label}
+                            onChange={(e) =>
+                                setCriteria((cs) =>
+                                    cs.map((x, j) =>
+                                        j === i ? { ...x, label: e.target.value } : x
+                                    )
+                                )
+                            }
+                        />
+                        <Select
+                            className="w-28"
+                            value={c.weight}
+                            onChange={(e) =>
+                                setCriteria((cs) =>
+                                    cs.map((x, j) =>
+                                        j === i
+                                            ? { ...x, weight: Number(e.target.value) }
+                                            : x
+                                    )
+                                )
+                            }
+                        >
+                            {[1, 2, 3, 4, 5].map((w) => (
+                                <option key={w} value={w}>
+                                    وزن {w}
+                                </option>
+                            ))}
+                        </Select>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setCriteria((cs) => cs.filter((_, j) => j !== i))
+                            }
+                            className="text-slate-500 hover:text-red-400 px-1"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    </div>
+                ))}
+                <div className="flex gap-2">
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        icon={Plus}
+                        onClick={() =>
+                            setCriteria((cs) => [...cs, { label: "", weight: 1 }])
+                        }
+                    >
+                        معیار
+                    </Button>
+                    <Button type="submit" size="sm">
+                        ذخیرهٔ کارت
+                    </Button>
+                </div>
+            </form>
+            {loading ? (
+                <Skeleton className="h-20" />
+            ) : (
+                <div className="divide-y divide-slate-800">
+                    {(data || []).map((sc) => (
+                        <div key={sc.id} className="flex items-start justify-between py-3">
+                            <div>
+                                <div className="text-sm text-slate-200">{sc.name}</div>
+                                <div className="text-xs text-slate-500 mt-0.5">
+                                    {(sc.criteria || [])
+                                        .map((c) => `${c.label} (${c.weight})`)
+                                        .join("، ")}
+                                </div>
+                            </div>
+                            <button
+                                onClick={() =>
+                                    metaApi
+                                        .removeScorecard(sc.id)
+                                        .then(reload)
+                                        .catch(() => toast.error("حذف ناموفق بود"))
+                                }
+                                className="text-slate-500 hover:text-red-400"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {!data?.length && (
+                        <p className="text-sm text-slate-500 py-2">کارتی ثبت نشده.</p>
+                    )}
+                </div>
+            )}
+        </Card>
+    );
+}
+
+/* --------------------------------------------------------- job templates */
+function JobTemplatesSection() {
+    const toast = useToast();
+    const { data, loading, reload } = useAsync(() => metaApi.jobTemplates(), []);
+    const [form, setForm] = useState({ name: "", title: "", description: "" });
+
+    const add = async (e) => {
+        e.preventDefault();
+        if (!form.name.trim()) return;
+        try {
+            await metaApi.createJobTemplate(form);
+            setForm({ name: "", title: "", description: "" });
+            reload();
+        } catch {
+            toast.error("افزودن قالب ناموفق بود");
+        }
+    };
+
+    return (
+        <Card className="p-6 max-w-xl">
+            <SectionTitle>قالب‌های آگهی شغلی</SectionTitle>
+            <form onSubmit={add} className="space-y-3 mb-5">
+                <Input
+                    placeholder="نام قالب"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                />
+                <Input
+                    placeholder="عنوان شغلی پیش‌فرض"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+                <textarea
+                    placeholder="شرح موقعیت"
+                    rows={3}
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500"
+                />
+                <Button type="submit" size="sm">
+                    ذخیرهٔ قالب
+                </Button>
+            </form>
+            {loading ? (
+                <Skeleton className="h-20" />
+            ) : (
+                <div className="divide-y divide-slate-800">
+                    {(data || []).map((t) => (
+                        <div key={t.id} className="flex items-center justify-between py-3">
+                            <div>
+                                <div className="text-sm text-slate-200">{t.name}</div>
+                                <div className="text-xs text-slate-500">{t.title || "—"}</div>
+                            </div>
+                            <button
+                                onClick={() =>
+                                    metaApi
+                                        .removeJobTemplate(t.id)
+                                        .then(reload)
+                                        .catch(() => toast.error("حذف ناموفق بود"))
+                                }
+                                className="text-slate-500 hover:text-red-400"
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {!data?.length && (
+                        <p className="text-sm text-slate-500 py-2">قالبی ثبت نشده.</p>
+                    )}
+                </div>
+            )}
+        </Card>
+    );
+}
+
 /* --------------------------------------------------------------------- page */
 export default function SettingsPage() {
     const tabs = [
         { key: "profile", label: "پروفایل" },
         { key: "security", label: "امنیت" },
         { key: "tags", label: "برچسب‌ها" },
-        ...(MODULES.jobs ? [{ key: "departments", label: "دپارتمان‌ها" }] : []),
-        ...(MODULES.pipeline ? [{ key: "stages", label: "مراحل استخدام" }] : []),
+        ...(MODULES.jobs
+            ? [
+                  { key: "departments", label: "دپارتمان‌ها" },
+                  { key: "templates", label: "قالب آگهی" },
+              ]
+            : []),
+        ...(MODULES.pipeline
+            ? [
+                  { key: "stages", label: "مراحل استخدام" },
+                  { key: "scorecards", label: "کارت امتیاز" },
+              ]
+            : []),
         { key: "team", label: "تیم" },
     ];
     const [tab, setTab] = useState("profile");
@@ -393,7 +604,9 @@ export default function SettingsPage() {
             {tab === "security" && <SecuritySection />}
             {tab === "tags" && <TagsSection />}
             {tab === "departments" && <DepartmentsSection />}
+            {tab === "templates" && <JobTemplatesSection />}
             {tab === "stages" && <StagesSection />}
+            {tab === "scorecards" && <ScorecardsSection />}
             {tab === "team" && <TeamSection />}
         </div>
     );

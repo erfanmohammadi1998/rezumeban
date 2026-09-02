@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarClock, Plus, Star } from "lucide-react";
 
-import { interviewsApi, jobsApi } from "../../api/client";
+import { interviewsApi, jobsApi, metaApi } from "../../api/client";
 import useAsync from "../../hooks/useAsync";
 import { useToast } from "../../context/ToastContext";
 import {
@@ -175,22 +175,49 @@ function ScheduleModal({ open, onClose, onSaved }) {
 
 function FeedbackModal({ interview, onClose, onSaved }) {
     const toast = useToast();
+    const { data: scorecards } = useAsync(() => metaApi.scorecards(), []);
     const [form, setForm] = useState(() => ({
         status: interview?.status || "completed",
         score: interview?.score || "",
         recommendation: interview?.recommendation || "",
         feedback: interview?.feedback || "",
+        scorecard: interview?.scorecard || "",
+        criteria_scores: interview?.criteria_scores || {},
     }));
     const [saving, setSaving] = useState(false);
 
+    const activeCard = (scorecards || []).find(
+        (s) => String(s.id) === String(form.scorecard)
+    );
+
+    // weighted overall from criteria (0–5), rounded to nearest int
+    const weightedOverall = () => {
+        if (!activeCard?.criteria?.length) return null;
+        let sum = 0;
+        let wsum = 0;
+        for (const c of activeCard.criteria) {
+            const v = Number(form.criteria_scores[c.label]);
+            if (v) {
+                sum += v * (c.weight || 1);
+                wsum += c.weight || 1;
+            }
+        }
+        return wsum ? Math.round(sum / wsum) : null;
+    };
+
     const submit = async () => {
         setSaving(true);
+        const overall = weightedOverall();
         try {
             await interviewsApi.update(interview.id, {
                 status: form.status,
-                score: form.score === "" ? null : Number(form.score),
+                score:
+                    overall ??
+                    (form.score === "" ? null : Number(form.score)),
                 recommendation: form.recommendation,
                 feedback: form.feedback,
+                scorecard: form.scorecard || null,
+                criteria_scores: form.criteria_scores,
             });
             toast.success("ثبت شد");
             onSaved();
@@ -246,6 +273,80 @@ function FeedbackModal({ interview, onClose, onSaved }) {
                         />
                     </Field>
                 </div>
+                {scorecards?.length > 0 && (
+                    <Field label="کارت امتیازدهی">
+                        <Select
+                            value={form.scorecard}
+                            onChange={(e) =>
+                                setForm((f) => ({
+                                    ...f,
+                                    scorecard: e.target.value,
+                                    criteria_scores: {},
+                                }))
+                            }
+                        >
+                            <option value="">— بدون کارت —</option>
+                            {scorecards.map((s) => (
+                                <option key={s.id} value={s.id}>
+                                    {s.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                )}
+
+                {activeCard?.criteria?.length > 0 && (
+                    <div className="space-y-3 rounded-xl border border-slate-800 p-4">
+                        {activeCard.criteria.map((c) => (
+                            <div key={c.label}>
+                                <div className="flex justify-between text-sm text-slate-300 mb-1">
+                                    <span>
+                                        {c.label}{" "}
+                                        <span className="text-slate-600">
+                                            (وزن {c.weight})
+                                        </span>
+                                    </span>
+                                    <span className="text-slate-500">
+                                        {form.criteria_scores[c.label] || "—"}
+                                    </span>
+                                </div>
+                                <div className="flex gap-1.5">
+                                    {[1, 2, 3, 4, 5].map((n) => (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            onClick={() =>
+                                                setForm((f) => ({
+                                                    ...f,
+                                                    criteria_scores: {
+                                                        ...f.criteria_scores,
+                                                        [c.label]: n,
+                                                    },
+                                                }))
+                                            }
+                                            className={`flex-1 h-8 rounded-lg text-sm transition ${
+                                                Number(form.criteria_scores[c.label]) === n
+                                                    ? "bg-blue-600 text-white"
+                                                    : "bg-slate-800 text-slate-400 hover:bg-slate-700"
+                                            }`}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        {weightedOverall() != null && (
+                            <div className="text-sm text-slate-300 pt-1">
+                                امتیاز کل (وزنی):{" "}
+                                <span className="text-amber-400 font-semibold">
+                                    {weightedOverall()} از ۵
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <Field label="توصیه">
                     <Select
                         value={form.recommendation}

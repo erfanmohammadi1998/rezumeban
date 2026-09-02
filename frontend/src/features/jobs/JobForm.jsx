@@ -49,9 +49,28 @@ export default function JobForm({ open, onClose, job, onSaved }) {
         }
     }
 
+    const [templates, setTemplates] = useState([]);
     useEffect(() => {
-        if (open) metaApi.departments().then(setDepartments).catch(() => {});
-    }, [open]);
+        if (open) {
+            metaApi.departments().then(setDepartments).catch(() => {});
+            if (!job)
+                metaApi.jobTemplates().then(setTemplates).catch(() => setTemplates([]));
+        }
+    }, [open, job]);
+
+    const applyTemplate = (id) => {
+        const t = templates.find((x) => String(x.id) === String(id));
+        if (!t) return;
+        setForm((f) => ({
+            ...f,
+            title: t.title || f.title,
+            department_id: t.department?.id ?? f.department_id,
+            employment_type: t.employment_type || f.employment_type,
+            is_remote: t.is_remote,
+            description: t.description || f.description,
+            requirements: t.requirements || f.requirements,
+        }));
+    };
 
     const field = (e) =>
         setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
@@ -113,6 +132,22 @@ export default function JobForm({ open, onClose, job, onSaved }) {
             }
         >
             <form onSubmit={submit} className="space-y-4">
+                {!editing && templates.length > 0 && (
+                    <Field label="شروع از قالب">
+                        <Select
+                            defaultValue=""
+                            onChange={(e) => applyTemplate(e.target.value)}
+                        >
+                            <option value="">— بدون قالب —</option>
+                            {templates.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                    {t.name}
+                                </option>
+                            ))}
+                        </Select>
+                    </Field>
+                )}
+
                 <Field label="عنوان شغلی" required error={err("title")}>
                     <Input name="title" value={form.title} onChange={field} required />
                 </Field>

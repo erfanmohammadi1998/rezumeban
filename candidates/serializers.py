@@ -12,10 +12,14 @@ from .models import (
     Education,
     Interview,
     Job,
+    JobTemplate,
     Note,
+    Offer,
     PipelineStage,
+    ScorecardTemplate,
     Skill,
     Tag,
+    TalentPool,
     WorkExperience,
 )
 
@@ -482,6 +486,8 @@ class InterviewSerializer(serializers.ModelSerializer):
             "score",
             "recommendation",
             "feedback",
+            "scorecard",
+            "criteria_scores",
             "created_at",
         )
 
@@ -651,3 +657,97 @@ class DashboardStatsSerializer(serializers.Serializer):
     applications_trend = serializers.ListField()
     upcoming_interviews = InterviewSerializer(many=True)
     recent_activity = ActivitySerializer(many=True)
+
+
+# --------------------------------------------------------------------------- #
+#  Scorecards / offers / talent pools / job templates
+# --------------------------------------------------------------------------- #
+class ScorecardTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ScorecardTemplate
+        fields = ("id", "name", "criteria", "is_default", "created_at")
+
+
+class OfferSerializer(serializers.ModelSerializer):
+    candidate = serializers.SerializerMethodField()
+    job = serializers.SerializerMethodField()
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    created_by = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Offer
+        fields = (
+            "id",
+            "application",
+            "candidate",
+            "job",
+            "title",
+            "salary",
+            "start_date",
+            "expires_on",
+            "status",
+            "status_display",
+            "body",
+            "created_by",
+            "sent_at",
+            "responded_at",
+            "created_at",
+        )
+        read_only_fields = ("status", "sent_at", "responded_at")
+
+    def get_candidate(self, obj):
+        return CandidateMiniSerializer(obj.application.candidate).data
+
+    def get_job(self, obj):
+        return JobMiniSerializer(obj.application.job).data
+
+
+class TalentPoolSerializer(serializers.ModelSerializer):
+    candidate_count = serializers.IntegerField(
+        source="candidates.count", read_only=True
+    )
+    owner = UserSerializer(read_only=True)
+
+    class Meta:
+        model = TalentPool
+        fields = (
+            "id",
+            "name",
+            "description",
+            "owner",
+            "candidate_count",
+            "created_at",
+        )
+
+
+class TalentPoolDetailSerializer(TalentPoolSerializer):
+    candidates = CandidateListSerializer(many=True, read_only=True)
+
+    class Meta(TalentPoolSerializer.Meta):
+        fields = TalentPoolSerializer.Meta.fields + ("candidates",)
+
+
+class JobTemplateSerializer(serializers.ModelSerializer):
+    department = DepartmentSerializer(read_only=True)
+    department_id = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+        source="department",
+    )
+
+    class Meta:
+        model = JobTemplate
+        fields = (
+            "id",
+            "name",
+            "title",
+            "department",
+            "department_id",
+            "employment_type",
+            "is_remote",
+            "description",
+            "requirements",
+            "created_at",
+        )

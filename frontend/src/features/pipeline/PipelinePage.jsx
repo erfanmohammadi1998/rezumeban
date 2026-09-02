@@ -1,14 +1,118 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { KanbanSquare, CalendarClock, X } from "lucide-react";
+import { KanbanSquare, CalendarClock, FileSignature, X } from "lucide-react";
 
-import { jobsApi, applicationsApi } from "../../api/client";
+import { jobsApi, applicationsApi, offersApi } from "../../api/client";
 import useAsync from "../../hooks/useAsync";
 import { useToast } from "../../context/ToastContext";
-import { Card, Badge, PageLoader, EmptyState, ErrorState } from "../../components/ui";
-import { Select } from "../../components/ui/form";
+import {
+    Card,
+    Badge,
+    Button,
+    PageLoader,
+    EmptyState,
+    ErrorState,
+} from "../../components/ui";
+import { Field, Input, Select, Textarea } from "../../components/ui/form";
+import Modal from "../../components/ui/Modal";
 import Avatar from "../../components/ui/Avatar";
 import { fmtDate, fmtRelative } from "../../lib/format";
+
+function OfferModal({ app, jobTitle, onClose, onDone }) {
+    const toast = useToast();
+    const [form, setForm] = useState({
+        title: jobTitle || "",
+        salary: "",
+        start_date: "",
+        expires_on: "",
+        body: "",
+    });
+    const [busy, setBusy] = useState(false);
+
+    const submit = async () => {
+        setBusy(true);
+        try {
+            await offersApi.create({
+                application: app.id,
+                title: form.title,
+                salary: form.salary ? Number(form.salary) : null,
+                start_date: form.start_date || null,
+                expires_on: form.expires_on || null,
+                body: form.body,
+            });
+            toast.success("پیش‌نویس پیشنهاد ساخته شد — از صفحهٔ پیشنهادها ارسال کنید");
+            onDone?.();
+            onClose();
+        } catch {
+            toast.error("ساخت پیشنهاد ناموفق بود");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            title={`پیشنهاد همکاری — ${app?.candidate?.full_name || ""}`}
+            footer={
+                <>
+                    <Button variant="ghost" onClick={onClose}>
+                        انصراف
+                    </Button>
+                    <Button loading={busy} onClick={submit}>
+                        ساخت پیش‌نویس
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-4">
+                <Field label="عنوان">
+                    <Input
+                        value={form.title}
+                        onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    />
+                </Field>
+                <div className="grid grid-cols-3 gap-3">
+                    <Field label="حقوق (تومان)">
+                        <Input
+                            type="number"
+                            value={form.salary}
+                            onChange={(e) =>
+                                setForm({ ...form, salary: e.target.value })
+                            }
+                        />
+                    </Field>
+                    <Field label="تاریخ شروع">
+                        <Input
+                            type="date"
+                            value={form.start_date}
+                            onChange={(e) =>
+                                setForm({ ...form, start_date: e.target.value })
+                            }
+                        />
+                    </Field>
+                    <Field label="مهلت پاسخ">
+                        <Input
+                            type="date"
+                            value={form.expires_on}
+                            onChange={(e) =>
+                                setForm({ ...form, expires_on: e.target.value })
+                            }
+                        />
+                    </Field>
+                </div>
+                <Field label="متن پیشنهاد">
+                    <Textarea
+                        rows={4}
+                        value={form.body}
+                        onChange={(e) => setForm({ ...form, body: e.target.value })}
+                    />
+                </Field>
+            </div>
+        </Modal>
+    );
+}
 
 const STAGE_ACCENT = {
     won: "border-t-green-500",
@@ -16,7 +120,7 @@ const STAGE_ACCENT = {
     active: "border-t-blue-500",
 };
 
-function ApplicationCard({ app, onDragStart, onReject }) {
+function ApplicationCard({ app, onDragStart, onReject, onOffer }) {
     return (
         <div
             draggable
@@ -32,13 +136,22 @@ function ApplicationCard({ app, onDragStart, onReject }) {
                     {app.candidate.full_name}
                 </Link>
                 {app.status === "active" && (
-                    <button
-                        onClick={() => onReject(app)}
-                        title="رد کردن"
-                        className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 transition"
-                    >
-                        <X size={14} />
-                    </button>
+                    <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">
+                        <button
+                            onClick={() => onOffer(app)}
+                            title="پیشنهاد همکاری"
+                            className="text-slate-500 hover:text-green-400"
+                        >
+                            <FileSignature size={13} />
+                        </button>
+                        <button
+                            onClick={() => onReject(app)}
+                            title="رد کردن"
+                            className="text-slate-500 hover:text-red-400"
+                        >
+                            <X size={14} />
+                        </button>
+                    </div>
                 )}
             </div>
             <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
@@ -59,6 +172,7 @@ export default function PipelinePage() {
     const [params, setParams] = useSearchParams();
     const jobSlug = params.get("job") || "";
     const [dragOverStage, setDragOverStage] = useState(null);
+    const [offerFor, setOfferFor] = useState(null);
 
     const { data: jobs, loading: loadingJobs } = useAsync(
         () => jobsApi.list({ status: "open", page_size: 100 }),
@@ -89,6 +203,7 @@ export default function PipelinePage() {
     };
 
     const jobOptions = jobs?.results || [];
+    const currentJobTitle = jobOptions.find((j) => j.slug === jobSlug)?.title || "";
 
     // default to the first open job once the list loads
     useEffect(() => {
@@ -183,6 +298,7 @@ export default function PipelinePage() {
                                         key={app.id}
                                         app={app}
                                         onReject={reject}
+                                        onOffer={setOfferFor}
                                         onDragStart={(e, a) =>
                                             e.dataTransfer.setData("application", String(a.id))
                                         }
@@ -200,6 +316,15 @@ export default function PipelinePage() {
                         {board.unassigned.length} درخواست بدون مرحله
                     </p>
                 </Card>
+            )}
+
+            {offerFor && (
+                <OfferModal
+                    app={offerFor}
+                    jobTitle={currentJobTitle}
+                    onClose={() => setOfferFor(null)}
+                    onDone={reload}
+                />
             )}
         </div>
     );

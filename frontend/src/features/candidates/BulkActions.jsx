@@ -1,9 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Tag, Trash2, Briefcase, GitCompare, X } from "lucide-react";
+import { Tag, Trash2, Briefcase, GitCompare, FolderPlus, X } from "lucide-react";
 
-import { candidatesApi, metaApi, jobsApi, applicationsApi } from "../../api/client";
+import {
+    candidatesApi,
+    metaApi,
+    jobsApi,
+    applicationsApi,
+    talentPoolsApi,
+} from "../../api/client";
 import { MODULES } from "../../config/modules";
 import { useToast } from "../../context/ToastContext";
 import useAsync from "../../hooks/useAsync";
@@ -130,6 +136,84 @@ function AddToJobModal({ ids, onClose, onDone }) {
     );
 }
 
+function AddToPoolModal({ ids, onClose, onDone }) {
+    const toast = useToast();
+    const { data: pools } = useAsync(() => talentPoolsApi.list(), []);
+    const [poolId, setPoolId] = useState("");
+    const [newName, setNewName] = useState("");
+    const [saving, setSaving] = useState(false);
+    const list = pools?.results || pools || [];
+
+    const apply = async () => {
+        setSaving(true);
+        try {
+            let target = poolId;
+            if (!target && newName.trim()) {
+                const created = await talentPoolsApi.create({ name: newName.trim() });
+                target = created.id;
+            }
+            if (!target) return;
+            await talentPoolsApi.add(target, ids);
+            toast.success(`${ids.length} کاندیدا به استخر اضافه شد`);
+            onDone();
+            onClose();
+        } catch {
+            toast.error("عملیات ناموفق بود");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Modal
+            open
+            onClose={onClose}
+            title={`افزودن ${ids.length} کاندیدا به استخر`}
+            footer={
+                <>
+                    <Button variant="ghost" onClick={onClose}>
+                        انصراف
+                    </Button>
+                    <Button
+                        loading={saving}
+                        disabled={!poolId && !newName.trim()}
+                        onClick={apply}
+                    >
+                        افزودن
+                    </Button>
+                </>
+            }
+        >
+            <div className="space-y-3">
+                <Select
+                    value={poolId}
+                    onChange={(e) => {
+                        setPoolId(e.target.value);
+                        setNewName("");
+                    }}
+                >
+                    <option value="">— استخر موجود —</option>
+                    {list.map((p) => (
+                        <option key={p.id} value={p.id}>
+                            {p.name} ({p.candidate_count})
+                        </option>
+                    ))}
+                </Select>
+                <div className="text-center text-xs text-slate-600">یا</div>
+                <input
+                    value={newName}
+                    onChange={(e) => {
+                        setNewName(e.target.value);
+                        setPoolId("");
+                    }}
+                    placeholder="نام استخر جدید"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500"
+                />
+            </div>
+        </Modal>
+    );
+}
+
 export default function BulkActions({ ids, query, onClear, onChanged }) {
     const toast = useToast();
     const navigate = useNavigate();
@@ -185,6 +269,14 @@ export default function BulkActions({ ids, query, onClear, onChanged }) {
                 <Button size="sm" variant="secondary" icon={Tag} onClick={() => setModal("tag")}>
                     برچسب
                 </Button>
+                <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={FolderPlus}
+                    onClick={() => setModal("pool")}
+                >
+                    استخر
+                </Button>
                 {MODULES.jobs && (
                     <Button
                         size="sm"
@@ -211,6 +303,13 @@ export default function BulkActions({ ids, query, onClear, onChanged }) {
             )}
             {modal === "job" && (
                 <AddToJobModal ids={ids} onClose={() => setModal(null)} onDone={onChanged} />
+            )}
+            {modal === "pool" && (
+                <AddToPoolModal
+                    ids={ids}
+                    onClose={() => setModal(null)}
+                    onDone={onChanged}
+                />
             )}
         </>
     );

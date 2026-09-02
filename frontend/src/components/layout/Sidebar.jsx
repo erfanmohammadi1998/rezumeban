@@ -11,6 +11,8 @@ import {
     HelpCircle,
     Settings,
     Globe,
+    FileSignature,
+    FolderOpen,
     X,
 } from "lucide-react";
 
@@ -21,7 +23,9 @@ const ALL_ITEMS = [
     { to: "/candidates", label: "کاندیداها", icon: Users, module: "candidates" },
     { to: "/jobs", label: "آگهی‌های شغلی", icon: Briefcase, module: "jobs" },
     { to: "/pipeline", label: "پایپ‌لاین استخدام", icon: KanbanSquare, module: "pipeline" },
+    { to: "/offers", label: "پیشنهادها", icon: FileSignature, module: "pipeline" },
     { to: "/interviews", label: "مصاحبه‌ها", icon: CalendarClock, module: "interviews" },
+    { to: "/pools", label: "استخر استعداد", icon: FolderOpen, module: "candidates" },
     { to: "/sourcing", label: "منبع‌یابی", icon: Radar, module: "sourcing" },
     { to: "/reports", label: "گزارش‌ها", icon: BarChart3, module: "reports" },
     { to: "/activity", label: "فعالیت‌ها", icon: History, module: "candidates" },

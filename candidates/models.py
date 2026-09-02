@@ -372,6 +372,15 @@ class Interview(TimeStampedModel):
         max_length=20, choices=RECOMMENDATIONS, blank=True, default=""
     )
     feedback = models.TextField(blank=True, default="")
+    scorecard = models.ForeignKey(
+        "ScorecardTemplate",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="interviews",
+    )
+    # {criterion_label: 1..5}
+    criteria_scores = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["scheduled_at"]
@@ -518,3 +527,102 @@ class Activity(models.Model):
 
     def __str__(self):
         return self.verb
+
+
+# --------------------------------------------------------------------------- #
+#  Scorecards / offers / talent pools / job templates
+# --------------------------------------------------------------------------- #
+class ScorecardTemplate(TimeStampedModel):
+    """A reusable set of weighted interview evaluation criteria."""
+
+    name = models.CharField(max_length=120, unique=True)
+    # [{"label": "دانش فنی", "weight": 3}, ...]
+    criteria = models.JSONField(default=list)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class Offer(TimeStampedModel):
+    STATUS_DRAFT = "draft"
+    STATUS_SENT = "sent"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_DECLINED = "declined"
+    STATUS_EXPIRED = "expired"
+    STATUSES = (
+        (STATUS_DRAFT, "پیش‌نویس"),
+        (STATUS_SENT, "ارسال‌شده"),
+        (STATUS_ACCEPTED, "پذیرفته‌شده"),
+        (STATUS_DECLINED, "رد شده"),
+        (STATUS_EXPIRED, "منقضی"),
+    )
+
+    application = models.ForeignKey(
+        Application, on_delete=models.CASCADE, related_name="offers"
+    )
+    title = models.CharField(max_length=200, blank=True, default="")
+    salary = models.PositiveIntegerField(null=True, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    expires_on = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUSES, default=STATUS_DRAFT)
+    body = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    sent_at = models.DateTimeField(null=True, blank=True)
+    responded_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"پیشنهاد به {self.application.candidate} ({self.get_status_display()})"
+
+
+class TalentPool(TimeStampedModel):
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True, default="")
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="talent_pools",
+    )
+    candidates = models.ManyToManyField(
+        Candidate, blank=True, related_name="talent_pools"
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class JobTemplate(TimeStampedModel):
+    name = models.CharField(max_length=120, unique=True)
+    title = models.CharField(max_length=200, blank=True, default="")
+    department = models.ForeignKey(
+        Department, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    employment_type = models.CharField(
+        max_length=20, choices=Job.EMPLOYMENT_TYPES, default="full_time"
+    )
+    is_remote = models.BooleanField(default=False)
+    description = models.TextField(blank=True, default="")
+    requirements = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name

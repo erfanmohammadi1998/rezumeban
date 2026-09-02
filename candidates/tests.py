@@ -4,7 +4,18 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from .models import Application, Candidate, Job, PipelineStage, Tag
+from .models import (
+    Application,
+    Candidate,
+    Interview,
+    Job,
+    JobTemplate,
+    Offer,
+    PipelineStage,
+    ScorecardTemplate,
+    Tag,
+    TalentPool,
+)
 
 
 class AuthTests(APITestCase):
@@ -243,6 +254,97 @@ class CandidateBankTests(APITestCase):
         self.assertTrue(
             Candidate.objects.filter(email="sara.import@x.com").exists()
         )
+
+
+class OfferPoolScorecardTemplateTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("rec", password="pw12345678")
+        self.client.force_authenticate(self.user)
+        self.won = PipelineStage.objects.create(name="Hired", order=9, kind="won")
+        self.job = Job.objects.create(title="Backend", status="open")
+        self.cand = Candidate.objects.create(
+            first_name="Sara", last_name="K", email="sara@x.com"
+        )
+        self.app = Application.objects.create(candidate=self.cand, job=self.job)
+
+    def test_offer_lifecycle(self):
+        res = self.client.post(
+            "/api/offers/",
+            {"application": self.app.id, "title": "Backend Dev", "salary": 50_000_000},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201, res.data)
+        offer_id = res.data["id"]
+        self.assertEqual(res.data["status"], "draft")
+
+        res = self.client.post(f"/api/offers/{offer_id}/send/")
+        self.assertEqual(res.data["status"], "sent")
+        self.assertIsNotNone(res.data["sent_at"])
+
+        res = self.client.post(f"/api/offers/{offer_id}/accept/")
+        self.assertEqual(res.data["status"], "accepted")
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, Application.STATUS_HIRED)
+        self.assertEqual(self.app.stage, self.won)
+
+    def test_talent_pool_add_remove(self):
+        res = self.client.post(
+            "/api/talent-pools/", {"name": "High potential"}, format="json"
+        )
+        pid = res.data["id"]
+        self.client.post(
+            f"/api/talent-pools/{pid}/add/",
+            {"candidate_ids": [self.cand.id]},
+            format="json",
+        )
+        res = self.client.get(f"/api/talent-pools/{pid}/")
+        self.assertEqual(len(res.data["candidates"]), 1)
+        self.client.post(
+            f"/api/talent-pools/{pid}/remove/",
+            {"candidate_ids": [self.cand.id]},
+            format="json",
+        )
+        self.assertEqual(TalentPool.objects.get(id=pid).candidates.count(), 0)
+
+    def test_scorecard_and_interview_criteria(self):
+        sc = ScorecardTemplate.objects.create(
+            name="فنی", criteria=[{"label": "دانش", "weight": 2}]
+        )
+        iv = Interview.objects.create(
+            application=self.app,
+            scheduled_at=timezone.now() + timedelta(days=1),
+        )
+        res = self.client.patch(
+            f"/api/interviews/{iv.id}/",
+            {"scorecard": sc.id, "criteria_scores": {"دانش": 4}, "score": 4},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200, res.data)
+        iv.refresh_from_db()
+        self.assertEqual(iv.scorecard, sc)
+        self.assertEqual(iv.criteria_scores["دانش"], 4)
+
+    def test_job_template_crud(self):
+        res = self.client.post(
+            "/api/job-templates/",
+            {"name": "بک‌اند", "title": "توسعه‌دهندهٔ بک‌اند", "description": "..."},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(JobTemplate.objects.count(), 1)
+
+    def test_stage_move_can_notify(self):
+        from django.core import mail
+
+        stage = PipelineStage.objects.create(name="مصاحبه", order=2, kind="active")
+        res = self.client.post(
+            f"/api/applications/{self.app.id}/move/",
+            {"stage_id": stage.id, "notify": True},
+            format="json",
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.cand.email, mail.outbox[0].to)
 
 
 class JobVisionProviderTests(APITestCase):
