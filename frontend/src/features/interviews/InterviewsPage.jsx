@@ -274,11 +274,65 @@ function FeedbackModal({ interview, onClose, onSaved }) {
     );
 }
 
+function InterviewRow({ iv, onFeedback, showDate }) {
+    return (
+        <Card className="p-4 flex items-center gap-4">
+            <Avatar name={iv.candidate?.full_name} src={iv.candidate?.photo} />
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Link
+                        to={`/candidates/${iv.candidate?.id}`}
+                        className="text-sm font-medium text-slate-100 hover:text-blue-400"
+                    >
+                        {iv.candidate?.full_name}
+                    </Link>
+                    <Badge color={INTERVIEW_STATUS_COLORS[iv.status]}>
+                        {INTERVIEW_STATUS_LABELS[iv.status]}
+                    </Badge>
+                </div>
+                <div className="text-xs text-slate-500 mt-1">
+                    {iv.job?.title} · {INTERVIEW_TYPE_LABELS[iv.interview_type]}
+                    {showDate
+                        ? ` · ${fmtDateTime(iv.scheduled_at)}`
+                        : ` · ${new Date(iv.scheduled_at).toLocaleTimeString("fa-IR", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                          })}`}
+                </div>
+            </div>
+            {iv.score ? (
+                <span className="flex items-center gap-1 text-sm text-amber-400">
+                    <Star size={14} className="fill-amber-400" />
+                    {iv.score}
+                </span>
+            ) : null}
+            <Button size="sm" variant="secondary" onClick={() => onFeedback(iv)}>
+                بازخورد
+            </Button>
+        </Card>
+    );
+}
+
+function groupByDay(items) {
+    const map = new Map();
+    for (const iv of items) {
+        const key = new Date(iv.scheduled_at).toLocaleDateString("fa-IR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+        });
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(iv);
+    }
+    return [...map.entries()];
+}
+
 export default function InterviewsPage() {
     const [upcoming, setUpcoming] = useState(true);
     const [status, setStatus] = useState("");
     const [type, setType] = useState("");
     const [jobSlug, setJobSlug] = useState("");
+    const [view, setView] = useState("list");
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [feedbackFor, setFeedbackFor] = useState(null);
 
@@ -315,9 +369,29 @@ export default function InterviewsPage() {
                         {(data?.count ?? items.length).toLocaleString("fa-IR")} مصاحبه
                     </p>
                 </div>
-                <Button icon={Plus} onClick={() => setScheduleOpen(true)}>
-                    زمان‌بندی مصاحبه
-                </Button>
+                <div className="flex items-center gap-2">
+                    <div className="flex rounded-xl border border-slate-800 overflow-hidden">
+                        {[
+                            ["list", "فهرست"],
+                            ["agenda", "روزشمار"],
+                        ].map(([v, label]) => (
+                            <button
+                                key={v}
+                                onClick={() => setView(v)}
+                                className={`px-3 py-2 text-sm transition ${
+                                    view === v
+                                        ? "bg-blue-600 text-white"
+                                        : "text-slate-400 hover:text-slate-200"
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                    <Button icon={Plus} onClick={() => setScheduleOpen(true)}>
+                        زمان‌بندی مصاحبه
+                    </Button>
+                </div>
             </div>
 
             <FilterBar
@@ -378,45 +452,35 @@ export default function InterviewsPage() {
                 </div>
             ) : items.length === 0 ? (
                 <EmptyState icon={CalendarClock} title="مصاحبه‌ای یافت نشد" />
+            ) : view === "agenda" ? (
+                <div className="space-y-6">
+                    {groupByDay(items).map(([day, dayItems]) => (
+                        <div key={day}>
+                            <h3 className="text-sm font-semibold text-slate-400 mb-2 sticky top-16 bg-slate-950/80 backdrop-blur py-1">
+                                {day}
+                            </h3>
+                            <div className="grid gap-2">
+                                {dayItems.map((iv) => (
+                                    <InterviewRow
+                                        key={iv.id}
+                                        iv={iv}
+                                        onFeedback={setFeedbackFor}
+                                        showDate={false}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             ) : (
                 <div className="grid gap-3">
                     {items.map((iv) => (
-                        <Card key={iv.id} className="p-4 flex items-center gap-4">
-                            <Avatar
-                                name={iv.candidate?.full_name}
-                                src={iv.candidate?.photo}
-                            />
-                            <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <Link
-                                        to={`/candidates/${iv.candidate?.id}`}
-                                        className="text-sm font-medium text-slate-100 hover:text-blue-400"
-                                    >
-                                        {iv.candidate?.full_name}
-                                    </Link>
-                                    <Badge color={INTERVIEW_STATUS_COLORS[iv.status]}>
-                                        {INTERVIEW_STATUS_LABELS[iv.status]}
-                                    </Badge>
-                                </div>
-                                <div className="text-xs text-slate-500 mt-1">
-                                    {iv.job?.title} · {INTERVIEW_TYPE_LABELS[iv.interview_type]}{" "}
-                                    · {fmtDateTime(iv.scheduled_at)}
-                                </div>
-                            </div>
-                            {iv.score ? (
-                                <span className="flex items-center gap-1 text-sm text-amber-400">
-                                    <Star size={14} className="fill-amber-400" />
-                                    {iv.score}
-                                </span>
-                            ) : null}
-                            <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => setFeedbackFor(iv)}
-                            >
-                                بازخورد
-                            </Button>
-                        </Card>
+                        <InterviewRow
+                            key={iv.id}
+                            iv={iv}
+                            onFeedback={setFeedbackFor}
+                            showDate
+                        />
                     ))}
                 </div>
             )}

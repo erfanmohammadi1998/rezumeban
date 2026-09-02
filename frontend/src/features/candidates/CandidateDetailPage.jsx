@@ -13,9 +13,12 @@ import {
     Briefcase,
     GraduationCap,
     Send,
+    FileText,
+    Download,
+    ChevronDown,
 } from "lucide-react";
 
-import { candidatesApi } from "../../api/client";
+import { candidatesApi, mediaUrl } from "../../api/client";
 import { MODULES } from "../../config/modules";
 import useAsync from "../../hooks/useAsync";
 import { useToast } from "../../context/ToastContext";
@@ -42,6 +45,50 @@ import {
     INTERVIEW_STATUS_LABELS,
 } from "../../lib/format";
 import CandidateForm from "./CandidateForm";
+
+function ResumePreview({ url }) {
+    const [open, setOpen] = useState(true);
+    const src = mediaUrl(url);
+    const isPdf = /\.pdf($|\?)/i.test(url);
+    return (
+        <Card className="p-0 overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4">
+                <button
+                    onClick={() => setOpen((o) => !o)}
+                    className="flex items-center gap-2 text-lg font-semibold text-slate-200"
+                >
+                    <FileText size={18} className="text-blue-400" />
+                    فایل رزومه
+                    <ChevronDown
+                        size={16}
+                        className={`text-slate-500 transition ${open ? "" : "-rotate-90"}`}
+                    />
+                </button>
+                <a
+                    href={src}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+                >
+                    <Download size={14} />
+                    دانلود
+                </a>
+            </div>
+            {open &&
+                (isPdf ? (
+                    <iframe
+                        src={src}
+                        title="رزومه"
+                        className="w-full h-[70vh] border-t border-slate-800 bg-white"
+                    />
+                ) : (
+                    <div className="px-6 py-8 text-center text-sm text-slate-500 border-t border-slate-800">
+                        پیش‌نمایش این نوع فایل ممکن نیست — روی «دانلود» بزنید.
+                    </div>
+                ))}
+        </Card>
+    );
+}
 
 function Contact({ icon: Icon, value, href }) {
     if (!value) return null;
@@ -190,6 +237,8 @@ export default function CandidateDetailPage() {
 
             <div className="grid gap-6 lg:grid-cols-3">
                 <div className="lg:col-span-2 space-y-6">
+                    {c.resume && <ResumePreview url={c.resume} />}
+
                     {c.summary && (
                         <Card className="p-6">
                             <SectionTitle>خلاصه</SectionTitle>
