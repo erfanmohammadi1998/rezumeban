@@ -10,6 +10,7 @@ import DashboardPage from "./features/dashboard/DashboardPage";
 import CandidatesPage from "./features/candidates/CandidatesPage";
 import CandidateDetailPage from "./features/candidates/CandidateDetailPage";
 import ComparePage from "./features/candidates/ComparePage";
+import DuplicatesPage from "./features/candidates/DuplicatesPage";
 import SettingsPage from "./features/settings/SettingsPage";
 import ActivityPage from "./features/activity/ActivityPage";
 import GuidePage from "./features/guide/GuidePage";
@@ -48,6 +49,7 @@ function App() {
                 <Route path="/" element={<DashboardPage />} />
                 <Route path="/candidates" element={<CandidatesPage />} />
                 <Route path="/candidates/compare" element={<ComparePage />} />
+                <Route path="/candidates/duplicates" element={<DuplicatesPage />} />
                 <Route path="/candidates/:id" element={<CandidateDetailPage />} />
                 <Route path="/activity" element={<ActivityPage />} />
                 <Route path="/guide" element={<GuidePage />} />

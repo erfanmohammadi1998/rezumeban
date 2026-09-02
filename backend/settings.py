@@ -165,12 +165,15 @@ RECRUITMENT_MODULE_ENABLED = "recruitment" in ENABLED_MODULES
 SOURCING_MODULE_ENABLED = "sourcing" in ENABLED_MODULES
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "CV Management System API",
-    "DESCRIPTION": "API documentation for CV Management System",
+    "TITLE": "رزومه‌بان API",
+    "DESCRIPTION": "سامانهٔ دریافت و مدیریت رزومه برای شرکت‌ها",
     "VERSION": "1.0.0",
 }
 
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 CORS_ALLOWED_ORIGINS = [
+    o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o
+] or [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]

@@ -203,6 +203,47 @@ class CandidateBankTests(APITestCase):
         self.assertEqual(len(res.data["applications"]), 1)
         self.assertEqual(res.data["applications"][0]["job_title"], "Role")
 
+    def test_duplicate_detection_and_merge(self):
+        dup = Candidate.objects.create(
+            first_name="A", last_name="One-dup", email="A@X.COM", rating=4
+        )
+        res = self.client.get("/api/candidates/duplicates/")
+        self.assertEqual(res.data["count"], 1)
+        group_ids = {c["id"] for c in res.data["groups"][0]["candidates"]}
+        self.assertEqual(group_ids, {self.a.id, dup.id})
+
+        job = Job.objects.create(title="R", status="open")
+        Application.objects.create(candidate=dup, job=job)
+        res = self.client.post(
+            f"/api/candidates/{self.a.id}/merge/", {"source": dup.id}, format="json"
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertFalse(Candidate.objects.filter(id=dup.id).exists())
+        self.assertEqual(self.a.applications.count(), 1)
+        self.a.refresh_from_db()
+        self.assertEqual(self.a.rating, 5)  # max(5, 4)
+
+    def test_csv_import(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        csv = (
+            "first_name,last_name,email\n"
+            "Sara,Karimi,sara.import@x.com\n"
+            "Dup,Row,a@x.com\n"
+            ",,\n"
+        ).encode("utf-8")
+        res = self.client.post(
+            "/api/candidates/import_csv/",
+            {"file": SimpleUploadedFile("c.csv", csv, content_type="text/csv")},
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data["created"], 1)
+        self.assertEqual(res.data["skipped"], 1)  # a@x.com already exists
+        self.assertEqual(len(res.data["errors"]), 1)  # the blank row
+        self.assertTrue(
+            Candidate.objects.filter(email="sara.import@x.com").exists()
+        )
+
 
 class JobVisionProviderTests(APITestCase):
     def test_jobvision_registered_as_live_job_provider(self):

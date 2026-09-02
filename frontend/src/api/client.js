@@ -43,6 +43,15 @@ export const candidatesApi = {
         api.post("candidates/bulk_delete/", { ids }).then(unwrap),
     export: (params) =>
         api.get("candidates/export/", { params, responseType: "blob" }),
+    duplicates: () => api.get("candidates/duplicates/").then(unwrap),
+    merge: (id, source) =>
+        api.post(`candidates/${id}/merge/`, { source }).then(unwrap),
+    importCsv: (formData) =>
+        api
+            .post("candidates/import_csv/", formData, {
+                headers: { "Content-Type": "multipart/form-data" },
+            })
+            .then(unwrap),
     rate: (id, rating) =>
         api.post(`candidates/${id}/rate/`, { rating }).then(unwrap),
     toggleFavorite: (id) =>

@@ -246,6 +246,160 @@ class CandidateViewSet(viewsets.ModelViewSet):
             )
         return response
 
+    @action(detail=False, methods=["get"])
+    def duplicates(self, request):
+        """Group candidates that share an email or a phone number."""
+        from collections import defaultdict
+
+        buckets = defaultdict(set)
+        rows = Candidate.objects.values("id", "email", "phone", "first_name", "last_name")
+        by_id = {}
+        for r in rows:
+            by_id[r["id"]] = r
+            if r["email"]:
+                buckets[("email", r["email"].strip().lower())].add(r["id"])
+            phone = (r["phone"] or "").strip()
+            if len(phone) >= 7:
+                buckets[("phone", phone[-10:])].add(r["id"])
+
+        groups = []
+        seen = set()
+        for (key_type, key), ids in buckets.items():
+            if len(ids) < 2 or frozenset(ids) in seen:
+                continue
+            seen.add(frozenset(ids))
+            members = Candidate.objects.filter(id__in=ids).prefetch_related(
+                "tags", "skills", "applications"
+            )
+            groups.append(
+                {
+                    "match_on": key_type,
+                    "value": key,
+                    "candidates": CandidateListSerializer(members, many=True).data,
+                }
+            )
+        return Response({"groups": groups, "count": len(groups)})
+
+    @action(detail=True, methods=["post"])
+    def merge(self, request, pk=None):
+        """Merge another candidate (``source``) into this one, then delete it."""
+        target = self.get_object()
+        try:
+            source = Candidate.objects.get(pk=request.data.get("source"))
+        except (Candidate.DoesNotExist, ValueError, TypeError):
+            return Response(
+                {"detail": "کاندیدای مبدأ نامعتبر است."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if source.pk == target.pk:
+            return Response(
+                {"detail": "نمی‌توان یک کاندیدا را با خودش ادغام کرد."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # move related rows
+        source.work_experiences.update(candidate=target)
+        source.educations.update(candidate=target)
+        source.skills.update(candidate=target)
+        source.notes.update(candidate=target)
+        source.activities.update(candidate=target)
+        for app in source.applications.all():
+            if not target.applications.filter(job=app.job).exists():
+                app.candidate = target
+                app.save(update_fields=["candidate"])
+        target.tags.add(*source.tags.all())
+
+        # fill blank fields on the target from the source
+        for field in ("phone", "headline", "location", "summary", "linkedin_url",
+                      "github_url", "portfolio_url"):
+            if not getattr(target, field) and getattr(source, field):
+                setattr(target, field, getattr(source, field))
+        if not target.photo and source.photo:
+            target.photo = source.photo
+        if not target.resume and source.resume:
+            target.resume = source.resume
+        target.rating = max(target.rating, source.rating)
+        target.is_favorite = target.is_favorite or source.is_favorite
+        target.save()
+
+        log_activity(
+            request.user,
+            f"کاندیدای تکراری «{source.full_name}» در «{target.full_name}» ادغام شد",
+            candidate=target,
+        )
+        source.delete()
+        return Response(CandidateSerializer(target).data)
+
+    @action(detail=False, methods=["post"])
+    def import_csv(self, request):
+        """Bulk-create candidates from an uploaded CSV file."""
+        import csv
+        import io
+
+        upload = request.FILES.get("file")
+        if not upload:
+            return Response(
+                {"detail": "فایلی ارسال نشد."}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            text = upload.read().decode("utf-8-sig")
+        except UnicodeDecodeError:
+            return Response(
+                {"detail": "فایل باید با کدگذاری UTF-8 باشد."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reader = csv.DictReader(io.StringIO(text))
+        aliases = {
+            "first_name": ["first_name", "نام", "firstname", "name"],
+            "last_name": ["last_name", "نام خانوادگی", "lastname", "family"],
+            "email": ["email", "ایمیل", "mail"],
+            "phone": ["phone", "تلفن", "mobile", "موبایل"],
+            "headline": ["headline", "عنوان شغلی", "title", "position"],
+            "location": ["location", "موقعیت", "شهر", "city"],
+        }
+
+        def pick(row, field):
+            for a in aliases[field]:
+                for k, v in row.items():
+                    if k and k.strip().lower() == a.lower() and v:
+                        return v.strip()
+            return ""
+
+        created, skipped, errors = 0, 0, []
+        for i, row in enumerate(reader, start=2):
+            email = pick(row, "email")
+            first = pick(row, "first_name")
+            last = pick(row, "last_name")
+            if not email and not (first and last):
+                errors.append(f"سطر {i}: ایمیل یا نام کامل لازم است")
+                continue
+            if email and Candidate.objects.filter(email__iexact=email).exists():
+                skipped += 1
+                continue
+            if not last and first and " " in first:
+                first, last = first.split(" ", 1)
+            try:
+                Candidate.objects.create(
+                    first_name=first or "نامشخص",
+                    last_name=last or "-",
+                    email=email
+                    or f"import-{timezone.now().timestamp():.0f}-{i}@import.local",
+                    phone=pick(row, "phone"),
+                    headline=pick(row, "headline"),
+                    location=pick(row, "location"),
+                    source="other",
+                )
+                created += 1
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"سطر {i}: {exc}")
+
+        if created:
+            log_activity(request.user, f"{created} کاندیدا از فایل CSV وارد شد")
+        return Response(
+            {"created": created, "skipped": skipped, "errors": errors[:20]}
+        )
+
     @action(detail=True, methods=["post"])
     def rate(self, request, pk=None):
         candidate = self.get_object()

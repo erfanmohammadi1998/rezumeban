@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Plus, Star, Users } from "lucide-react";
+import { Plus, Star, Users, Upload, Copy } from "lucide-react";
 
 import { candidatesApi, metaApi } from "../../api/client";
 import useAsync from "../../hooks/useAsync";
@@ -21,6 +21,7 @@ import Pagination from "../../components/ui/Pagination";
 import { SOURCE_LABELS, fmtRelative } from "../../lib/format";
 import CandidateForm from "./CandidateForm";
 import BulkActions from "./BulkActions";
+import ImportModal from "./ImportModal";
 
 const ORDERINGS = [
     { value: "-created_at", label: "جدیدترین" },
@@ -47,7 +48,10 @@ export default function CandidatesPage() {
     const toast = useToast();
     const [params, setParams] = useSearchParams();
     const [formOpen, setFormOpen] = useState(false);
+    const [importOpen, setImportOpen] = useState(false);
     const [selected, setSelected] = useState(() => new Set());
+
+    const { data: dupes } = useAsync(() => candidatesApi.duplicates(), []);
 
     // command palette / deep link: ?new=1 opens the create form
     const [newHandled, setNewHandled] = useState(false);
@@ -146,17 +150,37 @@ export default function CandidatesPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-100">کاندیداها</h1>
                     <p className="text-slate-500 mt-1">
                         {count.toLocaleString("fa-IR")} کاندیدا در بانک رزومه
                     </p>
                 </div>
-                <Button icon={Plus} onClick={() => setFormOpen(true)}>
-                    افزودن کاندیدا
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="secondary"
+                        icon={Upload}
+                        onClick={() => setImportOpen(true)}
+                    >
+                        ورود از فایل
+                    </Button>
+                    <Button icon={Plus} onClick={() => setFormOpen(true)}>
+                        افزودن کاندیدا
+                    </Button>
+                </div>
             </div>
+
+            {dupes?.count > 0 && (
+                <Link
+                    to="/candidates/duplicates"
+                    className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-amber-300 hover:bg-amber-500/10 transition"
+                >
+                    <Copy size={15} />
+                    {dupes.count.toLocaleString("fa-IR")} گروه کاندیدای احتمالاً تکراری —
+                    بررسی و ادغام
+                </Link>
+            )}
 
             <FilterBar
                 search={{
@@ -321,6 +345,11 @@ export default function CandidatesPage() {
                 open={formOpen}
                 onClose={() => setFormOpen(false)}
                 onSaved={reload}
+            />
+            <ImportModal
+                open={importOpen}
+                onClose={() => setImportOpen(false)}
+                onDone={reload}
             />
 
             {selected.size > 0 && (
