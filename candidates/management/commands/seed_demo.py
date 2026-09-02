@@ -75,7 +75,7 @@ TAGS = [
 
 
 class Command(BaseCommand):
-    help = "Seed the database with realistic demo data for TalentBase."
+    help = "Seed the database with realistic demo data for رزومه‌بان."
 
     def add_arguments(self, parser):
         parser.add_argument("--flush", action="store_true", help="Delete existing data first")

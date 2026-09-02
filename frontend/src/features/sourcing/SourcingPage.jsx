@@ -8,8 +8,6 @@ import {
     Trash2,
     ExternalLink,
     CheckCircle2,
-    Users,
-    Briefcase,
 } from "lucide-react";
 
 import { sourcingApi } from "../../api/client";
@@ -24,12 +22,6 @@ import {
     SectionTitle,
 } from "../../components/ui";
 import { Field, Input, Select } from "../../components/ui/form";
-import Tabs from "../../components/ui/Tabs";
-
-const KINDS = [
-    { key: "jobs", label: "آگهی شغلی", icon: Briefcase },
-    { key: "candidates", label: "کاندیدا", icon: Users },
-];
 
 const STATUS_META = {
     new: { label: "جدید", color: "blue" },
@@ -77,14 +69,12 @@ function ResultCard({ result, onImport, onDismiss, busy }) {
                             to={
                                 result.imported_candidate
                                     ? `/candidates/${result.imported_candidate}`
-                                    : result.imported_job
-                                    ? "/jobs"
                                     : "#"
                             }
                             className="text-xs text-green-400 flex items-center gap-1"
                         >
                             <CheckCircle2 size={14} />
-                            مشاهده
+                            مشاهدهٔ کاندیدا
                         </Link>
                     ) : dismissed ? null : (
                         <>
@@ -146,7 +136,7 @@ function SavedSearches({ onRan }) {
                         <div>
                             <div className="text-sm text-slate-200">{s.name}</div>
                             <div className="text-xs text-slate-600">
-                                {s.provider} · {s.kind === "jobs" ? "آگهی" : "کاندیدا"}
+                                {s.provider}
                                 {s.last_result_count != null
                                     ? ` · آخرین: ${s.last_result_count}`
                                     : ""}
@@ -279,7 +269,6 @@ function StoredResults({ kind, refreshKey, onChanged }) {
 
 export default function SourcingPage() {
     const toast = useToast();
-    const [kind, setKind] = useState("jobs");
     const [provider, setProvider] = useState("");
     const [queryValues, setQueryValues] = useState({});
     const [searching, setSearching] = useState(false);
@@ -289,8 +278,8 @@ export default function SourcingPage() {
     const [storedKey, setStoredKey] = useState(0);
 
     const { data: providers, loading: loadingProviders } = useAsync(
-        () => sourcingApi.providers(kind),
-        [kind]
+        () => sourcingApi.providers("candidates"),
+        []
     );
 
     // when a fresh provider list arrives, default the selection to the first entry
@@ -312,7 +301,6 @@ export default function SourcingPage() {
         setSearching(true);
         try {
             const res = await sourcingApi.search({
-                kind,
                 provider,
                 query: queryValues,
                 save_as: saveAs.trim() || undefined,
@@ -364,20 +352,12 @@ export default function SourcingPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-2xl font-bold text-slate-100">منبع‌یابی</h1>
+                <h1 className="text-2xl font-bold text-slate-100">منبع‌یابی کاندیدا</h1>
                 <p className="text-slate-500 mt-1">
-                    دریافت آگهی و کاندیدا از منابع بیرونی (جاب‌ویژن، GitHub و…)
+                    پیدا کردن متخصص از APIهای عمومی جوامع فنی (GitHub، Stack Overflow،
+                    dev.to) و وارد کردن به بانک رزومه
                 </p>
             </div>
-
-            <Tabs
-                tabs={KINDS}
-                active={kind}
-                onChange={(k) => {
-                    setKind(k);
-                    setResults([]);
-                }}
-            />
 
             <Card className="p-6">
                 {loadingProviders ? (
@@ -470,7 +450,7 @@ export default function SourcingPage() {
             <SavedSearches onRan={() => setStoredKey((k) => k + 1)} />
 
             <StoredResults
-                kind={kind}
+                kind="candidates"
                 refreshKey={storedKey}
                 onChanged={() => setStoredKey((k) => k + 1)}
             />

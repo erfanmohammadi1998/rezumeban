@@ -1,35 +1,28 @@
 from .base import SourcingError
 from .providers import (
     DemoCandidateProvider,
-    DemoJobProvider,
-    EEstekhdamJobProvider,
+    DevToCandidateProvider,
     GitHubCandidateProvider,
-    GreenhouseJobProvider,
-    JobVisionJobProvider,
-    RemotiveJobProvider,
+    StackOverflowCandidateProvider,
 )
 
 _PROVIDERS = {
     p.slug: p
     for p in [
-        # jobs
-        JobVisionJobProvider(),
-        EEstekhdamJobProvider(),
-        RemotiveJobProvider(),
-        GreenhouseJobProvider(),
-        DemoJobProvider(),
-        # candidates
         GitHubCandidateProvider(),
+        StackOverflowCandidateProvider(),
+        DevToCandidateProvider(),
         DemoCandidateProvider(),
     ]
 }
 
 
 def list_providers(kind=None):
+    # رزومه‌بان only sources candidates; ``kind`` is accepted for compatibility.
     return [
         p.as_meta()
         for p in _PROVIDERS.values()
-        if kind is None or p.kind == kind
+        if kind in (None, "candidates", p.kind)
     ]
 
 

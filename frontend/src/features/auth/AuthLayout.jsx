@@ -1,20 +1,13 @@
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
-import { APP_NAME, APP_TAGLINE, APP_MODE } from "../../config/modules";
+import { APP_NAME, APP_TAGLINE } from "../../config/modules";
 
-const HIGHLIGHTS =
-    APP_MODE === "cv"
-        ? [
-              "بانک متمرکز رزومه‌ها با جستجوی پیشرفته",
-              "منبع‌یابی خودکار کاندیدا از GitHub و منابع دیگر",
-              "امتیازدهی، برچسب‌گذاری و یادداشت تیمی",
-          ]
-        : [
-              "پایپ‌لاین استخدام کانبان با کشیدن‌ورهاکردن",
-              "منبع‌یابی کاندیدا و آگهی از منابع واقعی",
-              "داشبورد و گزارش‌های تحلیلی زنده",
-              "پورتال عمومی دریافت درخواست شغلی",
-          ];
+const HIGHLIGHTS = [
+    "بانک رزومه با جستجو، فیلتر و مقایسهٔ پیشرفته",
+    "پایپ‌لاین استخدام کانبان، مصاحبه و کارت امتیاز",
+    "پیشنهاد همکاری، استخر استعداد و قالب آگهی",
+    "پورتال عمومی مشاغل + منبع‌یابی کاندیدا از GitHub، Stack Overflow، dev.to",
+];
 
 export default function AuthLayout({ title, subtitle, children }) {
     return (

@@ -104,18 +104,21 @@ class SourcingTests(APITestCase):
         self.user = User.objects.create_user("rec", password="pw12345678")
         self.client.force_authenticate(self.user)
 
-    def test_lists_providers_by_kind(self):
-        res = self.client.get("/api/sourcing/providers/?kind=candidates")
+    def test_only_candidate_providers_registered(self):
+        res = self.client.get("/api/sourcing/providers/")
         slugs = [p["slug"] for p in res.data]
         self.assertIn("github", slugs)
+        self.assertIn("stackoverflow", slugs)
+        self.assertIn("devto", slugs)
         self.assertIn("demo-candidates", slugs)
+        # job providers are gone from رزومه‌بان
+        self.assertNotIn("jobvision", slugs)
         self.assertNotIn("remotive", slugs)
 
-    def test_demo_candidate_search_and_import(self):
+    def test_demo_candidate_search_import_and_bulk(self):
         res = self.client.post(
             "/api/sourcing/search/",
             {
-                "kind": "candidates",
                 "provider": "demo-candidates",
                 "query": {"role": "Data Engineer", "count": 4},
                 "save_as": "Data engineers",
@@ -132,26 +135,15 @@ class SourcingTests(APITestCase):
         self.assertEqual(imp.data["kind"], "candidate")
         self.assertEqual(Candidate.objects.count(), 1)
 
-        # re-importing the same result is rejected
         again = self.client.post(f"/api/sourcing/results/{result_id}/import/")
         self.assertEqual(again.status_code, 400)
 
-    def test_demo_job_search_and_bulk_import(self):
-        res = self.client.post(
-            "/api/sourcing/search/",
-            {
-                "kind": "jobs",
-                "provider": "demo-jobs",
-                "query": {"q": "Backend Developer", "count": 5},
-            },
-            format="json",
-        )
-        ids = [r["id"] for r in res.data["results"][:3]]
+        ids = [r["id"] for r in res.data["results"][1:4]]
         bulk = self.client.post(
             "/api/sourcing/results/bulk-import/", {"ids": ids}, format="json"
         )
         self.assertEqual(bulk.data["imported"], 3)
-        self.assertEqual(Job.objects.count(), 3)
+        self.assertEqual(Candidate.objects.count(), 4)
 
 
 class CandidateBankTests(APITestCase):
@@ -345,16 +337,6 @@ class OfferPoolScorecardTemplateTests(APITestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(self.cand.email, mail.outbox[0].to)
-
-
-class JobVisionProviderTests(APITestCase):
-    def test_jobvision_registered_as_live_job_provider(self):
-        from candidates.sourcing import list_providers
-
-        providers = {p["slug"]: p for p in list_providers("jobs")}
-        self.assertIn("jobvision", providers)
-        self.assertTrue(providers["jobvision"]["is_live"])
-        self.assertIn("e-estekhdam", providers)
 
 
 class PublicPortalTests(APITestCase):

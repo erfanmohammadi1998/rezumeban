@@ -1,4 +1,4 @@
-"""API layer for the sourcing module (candidate & job aggregation)."""
+"""API layer for candidate sourcing (public developer/professional APIs)."""
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
@@ -6,11 +6,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Candidate, Job, SavedSearch, SourcingResult
-from .serializers import CandidateSerializer, JobSerializer
+from .models import Candidate, SavedSearch, SourcingResult
+from .serializers import CandidateSerializer
 from .sourcing import get_provider, list_providers
 from .sourcing.base import SourcingError
-from .sourcing.providers import normalise_candidate_import, normalise_job_import
+from .sourcing.providers import normalise_candidate_import
 
 
 # --------------------------------------------------------------------------- #
@@ -105,15 +105,6 @@ def _import_candidate(result, owner):
     return candidate
 
 
-def _import_job(result, user):
-    kwargs = normalise_job_import(result.raw, result)
-    job = Job.objects.create(hiring_manager=user, **kwargs)
-    result.status = SourcingResult.STATUS_IMPORTED
-    result.imported_job = job
-    result.save(update_fields=["status", "imported_job"])
-    return job
-
-
 # --------------------------------------------------------------------------- #
 class SourcingProvidersView(APIView):
     def get(self, request):
@@ -123,18 +114,13 @@ class SourcingProvidersView(APIView):
 
 class SourcingSearchView(APIView):
     def post(self, request):
-        kind = request.data.get("kind")
+        kind = "candidates"
         provider_slug = request.data.get("provider")
         query = request.data.get("query") or {}
         save_as = request.data.get("save_as")
 
-        if kind not in ("candidates", "jobs"):
-            return Response({"detail": "نوع نامعتبر است."}, status=400)
-
         try:
             provider = get_provider(provider_slug)
-            if provider.kind != kind:
-                return Response({"detail": "ارائه‌دهنده با نوع جست‌وجو همخوانی ندارد."}, status=400)
             rows = provider.search(query)
         except SourcingError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
@@ -198,10 +184,7 @@ class SavedSearchViewSet(viewsets.ModelViewSet):
                 if result.status != SourcingResult.STATUS_NEW:
                     continue
                 try:
-                    if search.kind == "candidates":
-                        imported.append(_import_candidate(result, request.user).id)
-                    else:
-                        imported.append(_import_job(result, request.user).id)
+                    imported.append(_import_candidate(result, request.user).id)
                 except Exception:  # noqa: BLE001 - keep the batch going
                     continue
 
@@ -216,14 +199,9 @@ class SavedSearchViewSet(viewsets.ModelViewSet):
 
 class SourcingResultViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = SourcingResultSerializer
-    queryset = SourcingResult.objects.select_related(
-        "imported_candidate", "imported_job"
-    )
+    queryset = SourcingResult.objects.select_related("imported_candidate")
     filterset_fields = ["kind", "status", "provider", "saved_search"]
     search_fields = ["title", "subtitle", "location"]
-
-    def get_queryset(self):
-        return super().get_queryset()
 
     @action(detail=True, methods=["post"], url_path="import")
     def import_result(self, request, pk=None):
@@ -232,17 +210,11 @@ class SourcingResultViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({"detail": "این مورد قبلاً وارد شده است."}, status=400)
         try:
             with transaction.atomic():
-                if result.kind == "candidates":
-                    obj = _import_candidate(result, request.user)
-                    return Response(
-                        {"kind": "candidate", "object": CandidateSerializer(obj).data},
-                        status=status.HTTP_201_CREATED,
-                    )
-                obj = _import_job(result, request.user)
-                return Response(
-                    {"kind": "job", "object": JobSerializer(obj).data},
-                    status=status.HTTP_201_CREATED,
-                )
+                obj = _import_candidate(result, request.user)
+            return Response(
+                {"kind": "candidate", "object": CandidateSerializer(obj).data},
+                status=status.HTTP_201_CREATED,
+            )
         except serializers.ValidationError as exc:
             return Response(exc.detail, status=400)
 
@@ -256,10 +228,7 @@ class SourcingResultViewSet(viewsets.ReadOnlyModelViewSet):
         for result in results:
             try:
                 with transaction.atomic():
-                    if result.kind == "candidates":
-                        obj = _import_candidate(result, request.user)
-                    else:
-                        obj = _import_job(result, request.user)
+                    obj = _import_candidate(result, request.user)
                 imported.append({"result": result.id, "object": obj.id})
             except Exception:  # noqa: BLE001
                 failed.append(result.id)
