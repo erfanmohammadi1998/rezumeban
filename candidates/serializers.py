@@ -1,7 +1,19 @@
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core.validators import FileExtensionValidator
 from django.db import transaction
 from rest_framework import serializers
+
+RESUME_EXTENSIONS = ("pdf", "doc", "docx", "rtf", "odt")
+
+
+def validate_upload_size(f):
+    limit = getattr(settings, "MAX_UPLOAD_MB", 8) * 1024 * 1024
+    if f and f.size > limit:
+        raise serializers.ValidationError(
+            f"حجم فایل نباید از {getattr(settings, 'MAX_UPLOAD_MB', 8)} مگابایت بیشتر باشد."
+        )
 
 from .models import (
     Activity,
@@ -206,6 +218,17 @@ class CandidateListSerializer(serializers.ModelSerializer):
 
 class CandidateSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
+    resume = serializers.FileField(
+        required=False,
+        allow_null=True,
+        validators=[
+            FileExtensionValidator(RESUME_EXTENSIONS),
+            validate_upload_size,
+        ],
+    )
+    photo = serializers.ImageField(
+        required=False, allow_null=True, validators=[validate_upload_size]
+    )
     work_experiences = WorkExperienceSerializer(many=True, required=False)
     educations = EducationSerializer(many=True, required=False)
     skills = SkillSerializer(many=True, required=False)
@@ -611,7 +634,13 @@ class PublicApplySerializer(serializers.Serializer):
     linkedin_url = serializers.URLField(required=False, allow_blank=True)
     summary = serializers.CharField(required=False, allow_blank=True)
     cover_letter = serializers.CharField(required=False, allow_blank=True)
-    resume = serializers.FileField(required=False)
+    resume = serializers.FileField(
+        required=False,
+        validators=[
+            FileExtensionValidator(RESUME_EXTENSIONS),
+            validate_upload_size,
+        ],
+    )
 
     @transaction.atomic
     def create(self, validated_data):

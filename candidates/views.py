@@ -1258,6 +1258,7 @@ class PublicJobDetailView(generics.RetrieveAPIView):
 class PublicApplyView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     serializer_class = PublicApplySerializer
+    throttle_scope = "public_apply"
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

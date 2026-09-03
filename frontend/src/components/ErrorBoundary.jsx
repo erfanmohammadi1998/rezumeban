@@ -21,9 +21,11 @@ export default class ErrorBoundary extends Component {
                     <p className="text-slate-400 mt-2 text-sm">
                         این صفحه به‌درستی بارگذاری نشد. صفحه را تازه کنید یا به داشبورد برگردید.
                     </p>
-                    <pre className="text-xs text-slate-600 mt-4 overflow-x-auto text-left bg-slate-900 rounded-lg p-3">
-                        {String(this.state.error?.message || this.state.error)}
-                    </pre>
+                    {import.meta.env.DEV && (
+                        <pre className="text-xs text-slate-600 mt-4 overflow-x-auto text-left bg-slate-900 rounded-lg p-3">
+                            {String(this.state.error?.message || this.state.error)}
+                        </pre>
+                    )}
                     <div className="flex gap-3 justify-center mt-5">
                         <button
                             onClick={() => window.location.reload()}

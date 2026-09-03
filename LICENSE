@@ -1,0 +1,25 @@
+رزومه‌بان — Proprietary Software License
+Copyright (c) 2026 Erfan Mohammadi. All rights reserved.
+
+This software and its source code are the exclusive property of the copyright
+holder. It is provided for evaluation and authorized use only.
+
+You MAY NOT, without prior written permission of the copyright holder:
+  • copy, redistribute, sublicense, sell, rent, or lease the software or any
+    part of it;
+  • publish or make the source code publicly available;
+  • remove or alter this notice.
+
+You MAY, if you have received the software directly from the copyright holder
+or an authorized distributor:
+  • run and deploy it for your own organization's internal recruitment use;
+  • modify it for that internal use.
+
+Third-party components retain their own licenses (see requirements.txt and
+frontend/package.json).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+For licensing enquiries: erfan.mohammadi.alv77@gmail.com

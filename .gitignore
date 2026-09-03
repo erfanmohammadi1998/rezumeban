@@ -13,6 +13,13 @@ env/
 .env
 /media/
 /staticfiles/
+/data/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/_qa*.mjs
 
 # IDE
 .vscode/

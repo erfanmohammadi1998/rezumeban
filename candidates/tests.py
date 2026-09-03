@@ -458,3 +458,32 @@ class PublicPortalTests(APITestCase):
         self.client.post("/api/public/apply/", payload, format="json")
         res = self.client.post("/api/public/apply/", payload, format="json")
         self.assertEqual(res.status_code, 400)
+
+
+class ProductionReadinessTests(APITestCase):
+    def test_health_endpoint(self):
+        res = self.client.get("/healthz/")
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "ok")
+
+    def test_public_apply_rejects_bad_resume_extension(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        PipelineStage.objects.create(name="New", order=1, kind="active")
+        job = Job.objects.create(title="Role", status="open")
+        res = self.client.post(
+            "/api/public/apply/",
+            {
+                "job": job.slug,
+                "first_name": "A",
+                "last_name": "B",
+                "email": "x@y.com",
+                "resume": SimpleUploadedFile("cv.exe", b"MZ", content_type="application/octet-stream"),
+            },
+        )
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("resume", res.data)
+
+    def test_schema_and_docs_load(self):
+        self.assertEqual(self.client.get("/api/schema/").status_code, 200)
+        self.assertEqual(self.client.get("/api/docs/").status_code, 200)

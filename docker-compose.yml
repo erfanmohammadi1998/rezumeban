@@ -1,0 +1,32 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: rezumeban
+      POSTGRES_USER: rezumeban
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rezumeban}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rezumeban"]
+      interval: 10s
+      retries: 5
+
+  web:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://rezumeban:${DB_PASSWORD:-rezumeban}@db:5432/rezumeban
+      MEDIA_ROOT: /data/media
+    volumes:
+      - media_data:/data/media
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  media_data:
