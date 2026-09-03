@@ -95,6 +95,25 @@ class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
 
+    def create(self, request, *args, **kwargs):
+        from django.conf import settings
+
+        # Open self-registration is a security risk for a private ATS.
+        # Allowed only when explicitly enabled, or for the very first user
+        # (who becomes a superuser so the instance is usable out of the box).
+        first_user = not User.objects.exists()
+        if not (settings.ALLOW_OPEN_REGISTRATION or first_user):
+            return Response(
+                {"detail": "ثبت‌نام باز نیست. برای دسترسی با مدیر سامانه تماس بگیرید."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        response = super().create(request, *args, **kwargs)
+        if first_user:
+            User.objects.filter(username=request.data.get("username")).update(
+                is_staff=True, is_superuser=True
+            )
+        return response
+
 
 class MeView(APIView):
     def get(self, request):

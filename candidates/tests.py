@@ -38,6 +38,26 @@ class AuthTests(APITestCase):
     def test_protected_endpoint_requires_auth(self):
         self.assertEqual(self.client.get("/api/candidates/").status_code, 401)
 
+    def test_first_user_is_superuser_then_registration_closes(self):
+        from django.test import override_settings
+
+        with override_settings(ALLOW_OPEN_REGISTRATION=False):
+            r1 = self.client.post(
+                "/api/auth/register/",
+                {"username": "owner", "password": "Str0ng!pass9"},
+                format="json",
+            )
+            self.assertEqual(r1.status_code, 201)
+            self.assertTrue(User.objects.get(username="owner").is_superuser)
+
+            r2 = self.client.post(
+                "/api/auth/register/",
+                {"username": "intruder", "password": "Str0ng!pass9"},
+                format="json",
+            )
+            self.assertEqual(r2.status_code, 403)
+            self.assertFalse(User.objects.filter(username="intruder").exists())
+
 
 class RecruitmentFlowTests(APITestCase):
     def setUp(self):

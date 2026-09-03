@@ -219,6 +219,11 @@ DEFAULT_FROM_EMAIL = os.environ.get(
 )
 CANDIDATE_EMAILS_ENABLED = env_bool("CANDIDATE_EMAILS_ENABLED", True)
 
+# Open self-registration. Off in production — the first account created is
+# always made a superuser so a fresh instance is usable; add teammates via
+# the admin or `manage.py createsuperuser`.
+ALLOW_OPEN_REGISTRATION = env_bool("ALLOW_OPEN_REGISTRATION", DEBUG)
+
 # --------------------------------------------------------------------------- #
 #  CORS
 # --------------------------------------------------------------------------- #
