@@ -12,7 +12,12 @@ export default function LoginPage() {
     const location = useLocation();
     const from = location.state?.from?.pathname || "/";
 
-    const [form, setForm] = useState({ username: "recruiter", password: "demo12345" });
+    const demo = import.meta.env.DEV;
+    const [form, setForm] = useState(
+        demo
+            ? { username: "recruiter", password: "demo12345" }
+            : { username: "", password: "" }
+    );
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
@@ -67,9 +72,11 @@ export default function LoginPage() {
                 </Link>
             </p>
 
-            <p className="text-xs text-slate-600 mt-4 text-center">
-                حساب دمو: <span className="text-slate-400">recruiter / demo12345</span>
-            </p>
+            {demo && (
+                <p className="text-xs text-slate-600 mt-4 text-center">
+                    حساب دمو: <span className="text-slate-400">recruiter / demo12345</span>
+                </p>
+            )}
         </AuthLayout>
     );
 }
